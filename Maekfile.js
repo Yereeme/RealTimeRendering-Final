@@ -90,6 +90,12 @@ const mirror_shaders = [
 ];
 main_objs.push(maek.CPP('MirrorPipeline.cpp', undefined, { depends: [...mirror_shaders] }));
 
+const water_shaders = [
+	maek.GLSLC('water.vert'),
+	maek.GLSLC('water.frag'),
+];
+main_objs.push(maek.CPP('WaterPipeline.cpp', undefined, { depends: [...water_shaders] }));
+
 const prebuilt_objs = [ ];
 
 //use the prebuilt refsol.o unless refsol.cpp exists:

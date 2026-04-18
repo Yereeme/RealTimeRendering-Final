@@ -1416,6 +1416,7 @@ VkDescriptorImageInfo brdf_info{
 		background_pipeline.set_layout,          // env layout
 		objects_pipeline.set1_Transforms         // transforms layout
 	);
+	water_pipeline.create(rtg, render_pass, 0);
 	shadow_pipeline.create(rtg, shadow_render_pass, 0);
 
 	 
@@ -3432,6 +3433,7 @@ Tutorial::~Tutorial() {
 	objects_pipeline.destroy(rtg);
 	pbr_pipeline.destroy(rtg);
 	mirror_pipeline.destroy(rtg);
+	water_pipeline.destroy(rtg);
 
 	if (command_pool != VK_NULL_HANDLE) {
 		vkDestroyCommandPool(rtg.device, command_pool, nullptr);
@@ -3509,6 +3511,7 @@ Tutorial::~Tutorial() {
 	objects_pipeline.destroy(rtg);
 	pbr_pipeline.destroy(rtg);
 	mirror_pipeline.destroy(rtg);
+	water_pipeline.destroy(rtg);
 
 
 	//destroy command pool
@@ -3976,6 +3979,25 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 				inst.vertices.first,
 				i
 			);
+		}
+
+		{// WATER PASS
+			//For now create water pipeline
+			//bind and draw
+			//just getting soome visual output to observe progress
+			vkCmdBindPipeline(
+				workspace.command_buffer,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				water_pipeline.handle
+			);
+
+			//dynamic viewport/scissor  
+			vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
+			vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
+
+			//draw full-screen triangle
+			//no vertex/index buffers needed for this temporary step
+			vkCmdDraw(workspace.command_buffer, 3, 1, 0, 0);
 		}
 
 		vkCmdEndRenderPass(workspace.command_buffer);

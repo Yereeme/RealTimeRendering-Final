@@ -198,6 +198,19 @@ struct Tutorial : RTG::Application {
 
 	} mirror_pipeline;
 
+	//WaterPipeline (step 1: flat-color pass wiring)
+	struct WaterPipeline {
+		//TODO: descriptor sets
+		//Pipeline create/bind/draw
+
+		VkPipelineLayout layout = VK_NULL_HANDLE;
+		VkPipeline handle = VK_NULL_HANDLE;
+
+		void create(RTG& RTG, VkRenderPass render_pass, uint32_t subpass);
+
+		void destroy(RTG& RTG);
+	} water_pipeline;
+
 	//PBRPipeline
 	struct PBRPipeline {
 
