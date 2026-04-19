@@ -200,8 +200,17 @@ struct Tutorial : RTG::Application {
 
 	//WaterPipeline (step 1: flat-color pass wiring)
 	struct WaterPipeline {
-		//TODO: descriptor sets
-		//Pipeline create/bind/draw
+		 //todo: descriptor sets
+		 //push constants
+
+		struct Push {
+			float time; //seconds, loops in update
+			float wave_strength; //vertocal shape amount
+			float foam_strength; //shoreline-style edge boost (screen-space proxy)
+
+			float padding; //keep std430-aligned to 16 bytes
+		};
+		static_assert(sizeof(Push) == 16, "Water push constants must stay 16 bytes.");
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
 		VkPipeline handle = VK_NULL_HANDLE;

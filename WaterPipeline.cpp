@@ -18,16 +18,22 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 	VkShaderModule vert_module = rtg.helpers.create_shader_module(vert_code);
 	VkShaderModule frag_module = rtg.helpers.create_shader_module(frag_code);
 
-	// step 1 layout:
+	// step 2 layout:
 	// - no descriptors yet
-	// - no push constants yet
-	{
+	
+	{//push constants
+		VkPushConstantRange push_range{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			.offset = 0,
+			.size = sizeof(Tutorial::WaterPipeline::Push),
+		};
+	 
 		VkPipelineLayoutCreateInfo create_info{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 			.setLayoutCount = 0,
 			.pSetLayouts = nullptr,
-			.pushConstantRangeCount = 0,
-			.pPushConstantRanges = nullptr,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &push_range,
 		};
 		VK(vkCreatePipelineLayout(rtg.device, &create_info, nullptr, &layout));
 	}

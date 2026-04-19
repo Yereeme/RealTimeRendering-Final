@@ -1620,6 +1620,7 @@ VkDescriptorImageInfo brdf_info{
 				constexpr uint32_t MAX_SHADOW_SPOT_LIGHTS = 16;
 				std::array<VkDescriptorImageInfo, MAX_SHADOW_SPOT_LIGHTS> shadow_infos{};
 				VkImageView fallback_view = shadow_map_views.empty() ? VK_NULL_HANDLE : shadow_map_views[0];
+				bool can_write_shadow_array = (fallback_view != VK_NULL_HANDLE);
 				for (uint32_t si = 0; si < MAX_SHADOW_SPOT_LIGHTS; ++si) {
 					VkImageView v = fallback_view;
 					if (si < shadow_map_views.size()) v = shadow_map_views[si];
@@ -1706,8 +1707,10 @@ VkDescriptorImageInfo brdf_info{
 
 			vkUpdateDescriptorSets(rtg.device, uint32_t(base_writes.size()), base_writes.data(), 0, nullptr);
 			vkUpdateDescriptorSets(rtg.device, 1, &write, 0, nullptr);
-			vkUpdateDescriptorSets(rtg.device, 1, &shadow_write, 0, nullptr);
-			 
+			if (can_write_shadow_array) {
+				vkUpdateDescriptorSets(rtg.device, 1, &shadow_write, 0, nullptr);
+			}
+
 			{
 				// Create a temporary CPU array that matches the GPU layout
 				std::vector<GPULight> gpu_lights;
@@ -3981,24 +3984,7 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 			);
 		}
 
-		{// WATER PASS
-			//For now create water pipeline
-			//bind and draw
-			//just getting soome visual output to observe progress
-			vkCmdBindPipeline(
-				workspace.command_buffer,
-				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				water_pipeline.handle
-			);
-
-			//dynamic viewport/scissor  
-			vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
-			vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
-
-			//draw full-screen triangle
-			//no vertex/index buffers needed for this temporary step
-			vkCmdDraw(workspace.command_buffer, 3, 1, 0, 0);
-		}
+		 
 
 		vkCmdEndRenderPass(workspace.command_buffer);
 	}
@@ -4351,6 +4337,37 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 			}
 		}
 
+		{// --- WATER PASS  ---
+			// 1) bind pipeline
+			vkCmdBindPipeline(
+				workspace.command_buffer,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				water_pipeline.handle
+			);
+
+			// 2) set viewport/scissor
+			vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
+			vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
+
+			// 3) push tiny runtime controls
+			WaterPipeline::Push water_push{};
+			water_push.time = time;
+			water_push.wave_strength = 1.0f;
+			water_push.foam_strength = 0.55f;
+			water_push.padding = 0.0f;
+
+			vkCmdPushConstants(
+				workspace.command_buffer,
+				water_pipeline.layout,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(WaterPipeline::Push),
+				&water_push
+			);
+
+			// 4) draw full-screen triangle
+			vkCmdDraw(workspace.command_buffer, 3, 1, 0, 0);
+		}
 		vkCmdEndRenderPass(workspace.command_buffer);
 	}
 

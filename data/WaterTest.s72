@@ -1,0 +1,124 @@
+["s72-v2",
+{
+
+	"type":"LIGHT",
+	"name":"Light",
+	"tint":[1, 1, 1],
+	"sphere":{
+		"radius":0.1,
+		"power":1000
+	}
+},
+{
+	"type":"NODE",
+	"name":"Light",
+	"translation":[4.07625,1.00545,5.90386],
+	"rotation":[0.169076,0.272171,0.75588,0.570948],
+	"scale":[1,1,1],
+	"light":"Light"
+},
+{
+
+	"type":"CAMERA",
+	"name":"Camera",
+	"perspective":{
+		"aspect":1.77778,
+		"vfov":0.47109,
+		"near":0.1,
+		"far":100
+	}
+},
+{
+	"type":"NODE",
+	"name":"Camera",
+	"translation":[7.35889,-6.92579,4.95831],
+	"rotation":[0.483536,0.208704,0.336872,0.780483],
+	"scale":[1,1,1],
+	"camera":"Camera"
+},
+{
+	"type":"MESH",
+	"name":"Plane",
+	"topology":"TRIANGLE_LIST",
+	"count":2904,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"WaterPlane",
+	"translation":[0,0,0],
+	"rotation":[0,0,0,1],
+	"scale":[244.346,244.346,244.346],
+	"mesh":"Plane"
+},
+{
+	"type":"MESH",
+	"name":"Cube.002",
+	"topology":"TRIANGLE_LIST",
+	"count":900,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Cube.002.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Cube.002.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Cube.002.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Cube.002.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Rock1",
+	"translation":[-141.313,-75.5801,4.20977],
+	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
+	"scale":[21.9385,21.9385,21.9385],
+	"mesh":"Cube.002"
+},
+{
+	"type":"MESH",
+	"name":"Cube.003",
+	"topology":"TRIANGLE_LIST",
+	"count":900,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Cube.003.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Cube.003.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Cube.003.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Cube.003.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Rock2",
+	"translation":[155.764,81.2329,-6.08945],
+	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
+	"scale":[21.9385,21.9385,21.9385],
+	"mesh":"Cube.003"
+},
+{
+	"type":"MESH",
+	"name":"Cube.004",
+	"topology":"TRIANGLE_LIST",
+	"count":900,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Cube.004.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Cube.004.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Cube.004.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Cube.004.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Rock3",
+	"translation":[-103.355,107.991,-2.25723],
+	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
+	"scale":[21.9385,21.9385,21.9385],
+	"mesh":"Cube.004"
+},
+{
+	"type":"SCENE",
+	"name":"WaterTest.blend",
+	"roots":["Light", "Camera", "WaterPlane", "Rock1", "Rock2", "Rock3"]
+}
+]
