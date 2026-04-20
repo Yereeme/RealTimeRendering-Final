@@ -563,6 +563,7 @@ Tutorial::Tutorial(RTG& rtg_, std::string const& scene_file_, RTG::Configuration
 
 	uint32_t rough_default_idx = 0;
 	uint32_t metal_default_idx = 0;
+	uint32_t flat_normal_idx = 0;
 
 	
 	auto write_pbr_env_set3 = [&](VkDescriptorSet dst_set) {
@@ -2619,7 +2620,7 @@ VkDescriptorImageInfo brdf_info{
 		// --- end helpers ---
 
 		// Make sure we always have a valid normal map at index 0 (flat normal).
-		uint32_t flat_normal_idx = 0;
+		//uint32_t flat_normal_idx = 0;
 		if (normal_maps.empty()) {
 			// RGBA = (128,128,255,255) => UNORM flat normal
 			uint32_t pixel = 0xFFFF8080u;
@@ -3035,7 +3036,9 @@ VkDescriptorImageInfo brdf_info{
 	{ //create the texture descriptor pool (set2 per material for S72, else per texture)
 		uint32_t set2_count = 0;
 		if (use_s72_scene) {
-			set2_count = uint32_t(scene.materials.size());
+			// Some scenes don't define MATERIAL entries.
+			// Keep one fallback set so unmaterialed meshes can still bind set=2 safely.
+			set2_count = uint32_t(std::max<size_t>(size_t(1), scene.materials.size()));
 		}
 		else {
 			set2_count = uint32_t(textures.size());
@@ -3077,8 +3080,9 @@ VkDescriptorImageInfo brdf_info{
 	 
 
 		if (use_s72_scene) {
+			size_t material_set_count = std::max<size_t>(size_t(1), scene.materials.size());
 			// 1. Allocate Lambertian Sets (2 bindings)
-			material_descriptors_lam.assign(scene.materials.size(), VK_NULL_HANDLE);
+			material_descriptors_lam.assign(material_set_count, VK_NULL_HANDLE);
 			VkDescriptorSetLayout lam_layout = objects_pipeline.set2_TEXTURE;
 			VkDescriptorSetAllocateInfo alloc_lam{
 				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -3088,7 +3092,7 @@ VkDescriptorImageInfo brdf_info{
 			};
 
 			// 2. Allocate PBR Sets (4 bindings)
-			material_descriptors_pbr.assign(scene.materials.size(), VK_NULL_HANDLE);
+			material_descriptors_pbr.assign(material_set_count, VK_NULL_HANDLE);
 			VkDescriptorSetLayout pbr_layout = pbr_pipeline.set2_TEXTURE;
 			VkDescriptorSetAllocateInfo alloc_pbr{
 				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -3097,17 +3101,17 @@ VkDescriptorImageInfo brdf_info{
 				.pSetLayouts = &pbr_layout,
 			};
 
-			for (size_t i = 0; i < scene.materials.size(); ++i) {
+			for (size_t i = 0; i < material_set_count; ++i) {
 				VK(vkAllocateDescriptorSets(rtg.device, &alloc_lam, &material_descriptors_lam[i]));
 				VK(vkAllocateDescriptorSets(rtg.device, &alloc_pbr, &material_descriptors_pbr[i]));
 			}
 
 			std::vector<VkWriteDescriptorSet> writes;
-			std::vector<VkDescriptorImageInfo> infos(scene.materials.size() * 6); // 2 Lam + 4 PBR
+			std::vector<VkDescriptorImageInfo> infos(material_set_count * 6); // 2 Lam + 4 PBR
 
-			for (size_t i = 0; i < scene.materials.size(); ++i) {
-				uint32_t albedo_idx = albedo_idx_per_set2[i];
-				uint32_t normal_idx = normal_idx_per_set2[i];
+			for (size_t i = 0; i < material_set_count; ++i) {
+				uint32_t albedo_idx = (i < albedo_idx_per_set2.size()) ? albedo_idx_per_set2[i] : 0;
+				uint32_t normal_idx = (i < normal_idx_per_set2.size()) ? normal_idx_per_set2[i] : flat_normal_idx;
 				uint32_t rough_idx = (i < roughness_idx_per_set2.size()) ? roughness_idx_per_set2[i] : rough_default_idx;
 				uint32_t metal_idx = (i < metalness_idx_per_set2.size()) ? metalness_idx_per_set2[i] : metal_default_idx;
 
@@ -4222,6 +4226,8 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 								auto it = material_name_to_set2.find(inst.material->name);
 								if (it != material_name_to_set2.end()) set2_idx = it->second;
 							}
+							if (material_descriptors_lam.empty()) continue;
+							set2_idx = std::min<uint32_t>(set2_idx, uint32_t(material_descriptors_lam.size() - 1));
 
 							std::array<VkDescriptorSet, 6> sets = {
 								workspace.World_descriptors,                  // set 0
@@ -4284,10 +4290,12 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 
 							for (uint32_t idx : pbr_instance_indices) { // Use the NEW specialized list
 								ObjectInstance const& inst = object_instances[idx];
+								if (material_descriptors_pbr.empty()) continue;
+								uint32_t pbr_set2_idx = std::min<uint32_t>(inst.texture, uint32_t(material_descriptors_pbr.size() - 1));
 								std::array<VkDescriptorSet, 6> sets = {
    workspace.World_descriptors,                  // set 0
    workspace.Transforms_descriptors,             // set 1
-   material_descriptors_pbr[inst.texture],       // set 2
+   material_descriptors_pbr[pbr_set2_idx],       // set 2
    workspace.PBR_Env_descriptors,                // set 3
    workspace.Lights_descriptors,                 // set 4
    workspace.Shadow_descriptors    // set 5
