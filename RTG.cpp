@@ -631,6 +631,13 @@ void RTG::recreate_swapchain() {
 		//set extent from configuration:
 		swapchain_extent = configuration.surface_extent;
 
+		if (swapchain_extent.width == 0 || swapchain_extent.height == 0) {
+			// Some platforms report 0x0 while minimized / mid-resize.
+			// Clamp to a safe minimal extent to avoid invalid Vulkan objects.
+			swapchain_extent.width = 1;
+			swapchain_extent.height = 1;
+		}
+
 		//set number of images to 3:
 		uint32_t requested_count = 3; //enough for FIFO-style presentation
 

@@ -200,22 +200,34 @@ struct Tutorial : RTG::Application {
 
 	//WaterPipeline (step 1: flat-color pass wiring)
 	struct WaterPipeline {
-		 //todo: descriptor sets
+		VkDescriptorSetLayout set0_Transforms = VK_NULL_HANDLE;
 		 //push constants
 
 		struct Push {
+			S72::vec3 camera_ws; // 12 bytes WORLD SPACE CAMERA POSITION
+
 			float time; //seconds, loops in update
 			float wave_strength; //vertocal shape amount
+
 			float foam_strength; //shoreline-style edge boost (screen-space proxy)
 
-			float padding; //keep std430-aligned to 16 bytes
+			float depth_near; //proxy start distance for shallow->deep transition
+
+			float depth_far; //proxy end distance for shallow->deep transition
+
+			float _pad0;
+			float _pad1; //keep size 16-byte aligned
+			float _pad2;
+			float _pad3; //keep size 16-byte aligned
+
 		};
-		static_assert(sizeof(Push) == 16, "Water push constants must stay 16 bytes.");
+		static_assert(sizeof(Push) == 48, "Water push constants must stay 48 bytes.");
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
+		using Vertex = PosNorTexVertex;
 		VkPipeline handle = VK_NULL_HANDLE;
 
-		void create(RTG& RTG, VkRenderPass render_pass, uint32_t subpass);
+		void create(RTG& RTG, VkRenderPass render_pass, uint32_t subpass, VkDescriptorSetLayout transforms_set_layout);
 
 		void destroy(RTG& RTG);
 	} water_pipeline;
@@ -558,6 +570,7 @@ struct Tutorial : RTG::Application {
 	std::vector< ObjectInstance > object_instances;
 	std::vector<uint32_t> mirror_instance_indices;
 	std::vector<uint32_t> pbr_instance_indices;
+	std::vector<uint32_t> water_instance_indices;
 	// per-set2 texture indices (debug / convenience):
 	std::vector<uint32_t> albedo_idx_per_set2;
 	std::vector<uint32_t> normal_idx_per_set2;

@@ -14,12 +14,12 @@ static uint32_t frag_code[] =
 #include "spv/water.frag.inl"
 ;
 
-void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_t subpass) {
+void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_t subpass, VkDescriptorSetLayout transforms_set_layout) {
 	VkShaderModule vert_module = rtg.helpers.create_shader_module(vert_code);
 	VkShaderModule frag_module = rtg.helpers.create_shader_module(frag_code);
 
 	// step 2 layout:
-	// - no descriptors yet
+	set0_Transforms = transforms_set_layout;
 	
 	{//push constants
 		VkPushConstantRange push_range{
@@ -27,11 +27,13 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 			.offset = 0,
 			.size = sizeof(Tutorial::WaterPipeline::Push),
 		};
+
+		VkDescriptorSetLayout set_layouts[1] = { set0_Transforms };
 	 
 		VkPipelineLayoutCreateInfo create_info{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.setLayoutCount = 0,
-			.pSetLayouts = nullptr,
+			.setLayoutCount = 1,
+			.pSetLayouts = set_layouts,
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = &push_range,
 		};
@@ -62,10 +64,10 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 	};
 
 	// depth test off for debug overlay
-	// (later water pass can switch this to true)
+	// Water is now mesh-based,
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_FALSE,
+			.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_FALSE,
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.depthBoundsTestEnable = VK_FALSE,
@@ -126,13 +128,7 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 		},
 	};
 
-	VkPipelineVertexInputStateCreateInfo vertex_input_state{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = 0,
-		.pVertexBindingDescriptions = nullptr,
-		.vertexAttributeDescriptionCount = 0,
-		.pVertexAttributeDescriptions = nullptr,
-	};
+	VkPipelineVertexInputStateCreateInfo const& vertex_input_state = Vertex::array_input_state;
 
 	VkGraphicsPipelineCreateInfo create_info{
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,

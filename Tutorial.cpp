@@ -15,13 +15,31 @@
 #include <functional>
 #include <unordered_map>
 #include <filesystem>
-
+#include <algorithm>
+#include <cctype>
 
  
 #include "external\tinyobjloader\tiny_obj_loader.h"
 
  
 #include "external\tinyobjloader\stb_image.h"
+
+static bool has_water_name_tag(std::string const& name) {
+	std::string lower = name;
+	std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+		return char(std::tolower(c));
+		});
+	return lower.find("water") != std::string::npos;
+}
+
+static bool has_water_material_tag(S72::Material const* material) {
+	if (!material) return false;
+	std::string lower = material->name;
+	std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+		return char(std::tolower(c));
+		});
+	return lower.rfind("water:", 0) == 0;
+}
 
 static mat4 mat4_transpose(mat4 const& m) {
 	return mat4{
@@ -727,7 +745,8 @@ VkDescriptorImageInfo brdf_info{
 			// 1x1 white per face (RGBA8)
 			std::array<std::vector<uint8_t>, 6> faces{};
 			for (int f = 0; f < 6; ++f) {
-				faces[f].assign(4, 0);
+				// Soft sky-blue fallback so "no environment" is still visible and not black.
+				faces[f] = { 150, 190, 235, 255 };
 			}
 
 			if (env_cubemap.handle != VK_NULL_HANDLE) {
@@ -774,6 +793,37 @@ VkDescriptorImageInfo brdf_info{
 		std::cout << "  materials:  " << scene.materials.size() << "\n";
 		std::cout << "  textures:   " << scene.textures.size() << "\n";
 		std::cout << "  datafiles:  " << scene.data_files.size() << "\n";
+
+		// Water authoring sanity check (first step before wiring mesh-only water draw):
+		// We support either a node-name tag (contains "water") OR a material naming tag
+		// (material name starts with "water:").
+		uint32_t water_named_nodes = 0;
+		uint32_t water_tagged_materials = 0;
+		for (auto const& mkv : scene.materials) {
+			auto const& mat = mkv.second;
+			std::string lower = mat.name;
+			std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+				return char(std::tolower(c));
+				});
+			if (lower.rfind("water:", 0) == 0) {
+				water_tagged_materials += 1;
+			}
+		}
+		std::function<void(S72::Node const&)> scan_water_nodes;
+		scan_water_nodes = [&](S72::Node const& n) {
+			if (has_water_name_tag(n.name)) water_named_nodes += 1;
+			for (auto const* child : n.children) {
+				scan_water_nodes(*child);
+			}
+			};
+		for (auto const* root : scene.scene.roots) {
+			scan_water_nodes(*root);
+		}
+		std::cout << "[water-check] node name tag matches: " << water_named_nodes << "\n";
+		std::cout << "[water-check] material tag matches (water:*): " << water_tagged_materials << "\n";
+		if (water_named_nodes == 0 && water_tagged_materials == 0) {
+			std::cout << "[water-check] WARNING: no water tags found. Name your plane node like 'WaterPlane' or material like 'water:ocean'.\n";
+		}
 
 		collect_scene_cameras(scene, scene_camera_nodes);
 		std::cout << "[A1-show] scene cameras found: " << scene_camera_nodes.size() << "\n";
@@ -1211,13 +1261,18 @@ VkDescriptorImageInfo brdf_info{
 	shadow_map_views.clear();
 	shadow_framebuffers.clear();
 
-	shadow_maps.resize(shadow_spot_lights.size());
-	shadow_map_views.resize(shadow_spot_lights.size(), VK_NULL_HANDLE);
-	shadow_framebuffers.resize(shadow_spot_lights.size(), VK_NULL_HANDLE);
+	// Keep at least one valid shadow image/view so set=5 descriptors are always writable,
+	// even when the scene has zero shadow-casting spot lights.
+	size_t shadow_resource_count = std::max<size_t>(size_t(1), shadow_spot_lights.size());
+	shadow_maps.resize(shadow_resource_count);
+	shadow_map_views.resize(shadow_resource_count, VK_NULL_HANDLE);
+	shadow_framebuffers.resize(shadow_resource_count, VK_NULL_HANDLE);
 
-	for (size_t li = 0; li < shadow_spot_lights.size(); ++li) {
+	for (size_t li = 0; li < shadow_resource_count; ++li) {
 
-		uint32_t shadowMapSize = uint32_t(shadow_spot_lights[li]->shadow);
+		uint32_t shadowMapSize = (li < shadow_spot_lights.size())
+			? uint32_t(shadow_spot_lights[li]->shadow)
+			: 1u;
 
 		shadow_maps[li] = rtg.helpers.create_image(
 			VkExtent2D{ shadowMapSize, shadowMapSize },
@@ -1417,7 +1472,7 @@ VkDescriptorImageInfo brdf_info{
 		background_pipeline.set_layout,          // env layout
 		objects_pipeline.set1_Transforms         // transforms layout
 	);
-	water_pipeline.create(rtg, render_pass, 0);
+	water_pipeline.create(rtg, render_pass, 0, objects_pipeline.set1_Transforms);
 	shadow_pipeline.create(rtg, shadow_render_pass, 0);
 
 	 
@@ -4345,36 +4400,67 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 			}
 		}
 
-		{// --- WATER PASS  ---
-			// 1) bind pipeline
-			vkCmdBindPipeline(
-				workspace.command_buffer,
-				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				water_pipeline.handle
-			);
+		{// --- WATER PASS (mesh-only) ---
+			if (!water_instance_indices.empty()) {
+				vkCmdBindPipeline(
+					workspace.command_buffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					water_pipeline.handle
+				);
 
 			// 2) set viewport/scissor
-			vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
-			vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
+				vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
+				vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
 
-			// 3) push tiny runtime controls
-			WaterPipeline::Push water_push{};
-			water_push.time = time;
-			water_push.wave_strength = 1.0f;
-			water_push.foam_strength = 0.55f;
-			water_push.padding = 0.0f;
+			//  
+				VkBuffer vertex_buffers[1] = { object_vertices.handle };
+				VkDeviceSize offsets[1] = { 0 };
+				vkCmdBindVertexBuffers(workspace.command_buffer, 0, 1, vertex_buffers, offsets);
 
-			vkCmdPushConstants(
-				workspace.command_buffer,
-				water_pipeline.layout,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(WaterPipeline::Push),
-				&water_push
-			);
+				vkCmdBindDescriptorSets(
+					workspace.command_buffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					water_pipeline.layout,
+					0,
+					1,
+					&workspace.Transforms_descriptors,
+					0,
+					nullptr
+				);
 
-			// 4) draw full-screen triangle
-			vkCmdDraw(workspace.command_buffer, 3, 1, 0, 0);
+				//push constants
+				WaterPipeline::Push water_push{};
+				mat4 view_to_world_water = mat4_inverse_rigid(this->VIEW_FROM_WORLD);
+				water_push.camera_ws = {
+					view_to_world_water[12],
+					view_to_world_water[13],
+					view_to_world_water[14]
+				};
+				water_push.time = time;
+				water_push.wave_strength = 1.0f;
+				water_push.foam_strength = 0.55f;
+				water_push.depth_near = 2.0f;
+				water_push.depth_far = 25.0f;
+				water_push._pad0 = 0.0f;
+				water_push._pad1 = 0.0f;
+				water_push._pad2 = 0.0f;
+				water_push._pad3 = 0.0f;
+
+				vkCmdPushConstants(
+					workspace.command_buffer,
+					water_pipeline.layout,
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					sizeof(WaterPipeline::Push),
+					&water_push
+				);
+
+
+				for (uint32_t idx : water_instance_indices) {
+					ObjectInstance const& inst = object_instances[idx];
+					vkCmdDraw(workspace.command_buffer, inst.vertices.count, 1, inst.vertices.first, idx);
+				}
+			}
 		}
 		vkCmdEndRenderPass(workspace.command_buffer);
 	}
@@ -5131,6 +5217,7 @@ void Tutorial::update(float dt) {
 		object_instances.clear();
 		mirror_instance_indices.clear();
 		pbr_instance_indices.clear();
+		water_instance_indices.clear();
 
 		if (!scene_file.empty()) {
 			// build instances from S72 scene nodes/meshes
@@ -5188,16 +5275,18 @@ void Tutorial::update(float dt) {
 
 						if ((!culled)) {
 							bool is_mirror = false;
-							bool is_pbr = false; // New flag
+							bool is_pbr = false;  
+							bool is_water = false;
 
 							if (n.mesh && n.mesh->material) {
 								// Categorize the material type once at startup/update
 								is_mirror = std::holds_alternative<S72::Material::Mirror>(n.mesh->material->brdf);
 								is_pbr = std::holds_alternative<S72::Material::PBR>(n.mesh->material->brdf);
 							}
+							is_water = has_water_name_tag(n.name) || has_water_material_tag(n.mesh->material);
 
 							object_instances.emplace_back(ObjectInstance{
-								.vertices = vr,
+									.vertices = vr,
 								.transform{
 									.CLIP_FROM_LOCAL = CLIP_FROM_WORLD * WORLD_FROM_LOCAL,
 									.WORLD_FROM_LOCAL = WORLD_FROM_LOCAL,
@@ -5213,6 +5302,9 @@ void Tutorial::update(float dt) {
 							}
 							else if (is_pbr) {
 								pbr_instance_indices.emplace_back(uint32_t(object_instances.size() - 1));
+							}
+							if (is_water) {
+								water_instance_indices.emplace_back(uint32_t(object_instances.size() - 1));
 							}
 						}
 					}
