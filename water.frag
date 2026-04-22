@@ -23,6 +23,7 @@ layout(location = 0) out vec4 outColor;
 layout(set=1, binding=0) uniform samplerCube envTex;
 layout(set=1, binding=1) uniform sampler2D sceneColorTex;
 layout(set=1, binding=2) uniform sampler2D sceneDepthTex;
+layout(set=1, binding=3) uniform sampler2D waterNormalTex;
 
   float fresnel_schlick(float cosTheta, float F0) {
 	// Schlick approximation:
@@ -48,14 +49,21 @@ float noise2(vec2 p) {
 }
 
  void main(){
- // Vertex shader already built a proper Gerstner surface normal.
-  // So here we just use that normal directly for stable shading.
-  vec3 n = normalize(v_world_normal);
-
-  //3) view direction from surface point -> camera (world-space).
-  vec3 v = normalize(uWater.camera_ws - v_world_pos);
-  
-  float NoV = clamp(dot(n, v), 0.0, 1.0);
+ // Stable geometric normal from the vertex-stage Gerstner derivatives.
+	// Blend in scrolling normal-map micro detail in projected XZ space.
+	vec3 geo_n = normalize(v_world_normal);
+	vec2 nm_uv0 = v_world_pos.xz * 0.22 + vec2(0.03, -0.02) * uWater.time;
+	vec2 nm_uv1 = v_world_pos.xz * 0.47 + vec2(-0.06, 0.05) * uWater.time;
+	vec3 nm0 = texture(waterNormalTex, nm_uv0).xyz * 2.0 - 1.0;
+	vec3 nm1 = texture(waterNormalTex, nm_uv1).xyz * 2.0 - 1.0;
+	vec2 micro_xz = normalize(nm0.xz + nm1.xz + vec2(1e-5));
+	vec3 n = normalize(vec3(
+		geo_n.x + micro_xz.x * 0.16,
+		geo_n.y,
+		geo_n.z + micro_xz.y * 0.16
+	));
+	vec3 v = normalize(uWater.camera_ws - v_world_pos);
+	float NoV = clamp(dot(n, v), 0.0, 1.0);
 
   // Reflection/transmission split.
 	float reflection_w = fresnel_schlick(NoV, 0.02);
@@ -121,5 +129,4 @@ float noise2(vec2 p) {
 	vec3 color = reflection_proxy * reflection_w + refraction_proxy * transmission_w + foam;
 	float alpha = mix(0.22, 0.52, depth_t) + 0.10 * grazing + 0.10 * (1.0 - thickness_t);
 	outColor = vec4(color, clamp(alpha, 0.20, 0.60));
-
- }
+}

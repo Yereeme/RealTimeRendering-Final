@@ -30,8 +30,9 @@ void Tutorial::WaterPipeline::create(
 	//  binding0: env cubemap
 	//  binding1: scene color
 	//  binding2: scene depth
+	//  binding3: water detail normal map
 	{
-		std::array<VkDescriptorSetLayoutBinding, 3> bindings{
+		std::array<VkDescriptorSetLayoutBinding, 4> bindings{
 			VkDescriptorSetLayoutBinding{
 				.binding = 0,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -46,6 +47,12 @@ void Tutorial::WaterPipeline::create(
 			},
 			VkDescriptorSetLayoutBinding{
 				.binding = 2,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			},
+			VkDescriptorSetLayoutBinding{
+				.binding = 3,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,

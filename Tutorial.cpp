@@ -3120,7 +3120,12 @@ VkDescriptorImageInfo brdf_info{
 		}
 	}
 
-	 
+	// Pick a detail normal map for water:
+	// use first non-flat when available, else flat.
+	if (!normal_map_views.empty()) {
+		water_detail_normal_idx = (normal_map_views.size() > 1) ? 1u : 0u;
+	}
+
 
 	 
 
@@ -3209,7 +3214,7 @@ VkDescriptorImageInfo brdf_info{
 		}
 
 		const uint32_t extra_sets = 6;
-		const uint32_t extra_samplers = 13;
+		const uint32_t extra_samplers = 14;
 
 		std::array<VkDescriptorPoolSize, 1> pool_sizes{
 			VkDescriptorPoolSize{
@@ -4487,16 +4492,25 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				};
 				VkDescriptorImageInfo water_scene_color_info{
-	.sampler = texture_sampler,
-	.imageView = rtg.swapchain_image_views[render_params.image_index],
-	.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					.sampler = texture_sampler,
+					.imageView = rtg.swapchain_image_views[render_params.image_index],
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				};
 				VkDescriptorImageInfo water_scene_depth_info{
 					.sampler = texture_sampler,
 					.imageView = swapchain_depth_image_view,
 					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
 				};
-				std::array<VkWriteDescriptorSet, 3> water_writes{
+				VkImageView water_normal_view =
+					(normal_map_views.empty())
+					? VK_NULL_HANDLE
+					: normal_map_views[std::min<size_t>(water_detail_normal_idx, normal_map_views.size() - 1)];
+				VkDescriptorImageInfo water_normal_info{
+					.sampler = texture_sampler,
+					.imageView = water_normal_view,
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				};
+				std::array<VkWriteDescriptorSet, 4> water_writes{
 					VkWriteDescriptorSet{
 						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 						.dstSet = water_surface_descriptors,
@@ -4521,12 +4535,20 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 						.pImageInfo = &water_scene_depth_info,
 					},
+					VkWriteDescriptorSet{
+						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+						.dstSet = water_surface_descriptors,
+						.dstBinding = 3,
+						.descriptorCount = 1,
+						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						.pImageInfo = &water_normal_info,
+					},
 				};
 				vkUpdateDescriptorSets(rtg.device, uint32_t(water_writes.size()), water_writes.data(), 0, nullptr);
 
 				VkDescriptorSet water_sets[2] = {
 					workspace.Transforms_descriptors, // set 0: transforms
-					water_surface_descriptors         // set 1: env + scene color + scene depth
+					water_surface_descriptors         // set 1: env + scene color + scene depth + detail normal
 				};
 
 				vkCmdBindDescriptorSets(

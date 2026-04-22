@@ -364,6 +364,7 @@ struct Tutorial : RTG::Application {
 	bool has_env_texture = false;
 	Helpers::AllocatedImage env_cubemap;
 	VkImageView env_cubemap_view = VK_NULL_HANDLE;
+	uint32_t water_detail_normal_idx = 0;
 	std::vector< Helpers::AllocatedImage > textures;
 	std::vector< VkImageView > texture_views;
 	std::vector<Helpers::AllocatedImage> normal_maps;
