@@ -1,5 +1,19 @@
 ["s72-v2",
 {
+	"type":"ENVIRONMENT",
+	"name":"SanFrancisco-cubemap-strip.png",
+	"radiance":{"src":"SanFrancisco-cubemap-strip.png", "type":"cube", "format":"rgbe"}
+},
+{
+	"type":"NODE",
+	"name":"!SanFrancisco-cubemap-strip.png",
+	"translation":[0,0,4.48802],
+	"rotation":[0,0,0,1],
+	"scale":[1,1,1],
+	"environment":"SanFrancisco-cubemap-strip.png"
+},
+
+{
 
 	"type":"LIGHT",
 	"name":"Light",
@@ -12,7 +26,7 @@
 {
 	"type":"NODE",
 	"name":"Light",
-	"translation":[4.07625,1.00545,5.90386],
+	"translation":[4.07625,1.00545,20.0514],
 	"rotation":[0.169076,0.272171,0.75588,0.570948],
 	"scale":[1,1,1],
 	"light":"Light"
@@ -52,7 +66,7 @@
 	"type":"NODE",
 	"name":"WaterPlane",
 	"translation":[0,0,0],
-	"rotation":[0,0,0,1],
+	"rotation":[-0,-1,-0,4.37114e-08],
 	"scale":[244.346,244.346,244.346],
 	"mesh":"Plane"
 },
@@ -117,8 +131,77 @@
 	"mesh":"Cube.004"
 },
 {
+	"type":"MESH",
+	"name":"Cube.001",
+	"topology":"TRIANGLE_LIST",
+	"count":900,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Cube.001.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Cube.001.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Cube.001.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Cube.001.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Rock1.001",
+	"translation":[-16.8611,142.841,-43.2399],
+	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
+	"scale":[21.9385,21.9385,21.9385],
+	"mesh":"Cube.001"
+},
+{
+	"type":"MESH",
+	"name":"Cube.005",
+	"topology":"TRIANGLE_LIST",
+	"count":900,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Cube.005.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Cube.005.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Cube.005.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Cube.005.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Rock1.002",
+	"translation":[-128.523,97.0874,-89.3348],
+	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
+	"scale":[21.9385,21.9385,21.9385],
+	"mesh":"Cube.005"
+},
+{
+	"type":"MESH",
+	"name":"Plane.001",
+	"topology":"TRIANGLE_LIST",
+	"count":6,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Plane",
+	"translation":[0,-269.768,9.24128],
+	"rotation":[-0.128397,0,0,0.991723],
+	"scale":[259.617,169.051,169.051],
+	"mesh":"Plane.001"
+},
+{
+	"type":"DRIVER",
+	"name":"!SanFrancisco-cubemap-strip.png-rotation",
+	"node":"!SanFrancisco-cubemap-strip.png",
+	"channel":"rotation",
+	"times":[0.000,0.033,0.067,0.100,0.133,0.167,0.200,0.233,0.267,0.300,0.333,0.367,0.400,0.433,0.467,0.500,0.533,0.567,0.600,0.633,0.667,0.700,0.733,0.767,0.800,0.833,0.867,0.900,0.933,0.967,1.000,1.033,1.067,1.100,1.133,1.167,1.200,1.233,1.267,1.300,1.333,1.367,1.400,1.433,1.467,1.500,1.533,1.567,1.600,1.633,1.667,1.700,1.733,1.767,1.800,1.833,1.867,1.900,1.933,1.967,2.000],
+	"values":[0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0.0102391,0.999948, 0,0,0.0400155,0.999199, 0,0,0.0878512,0.996134, 0,0,0.152066,0.98837, 0,0,0.230616,0.973045, 0,0,0.320944,0.947098, 0,0,0.419874,0.907582, 0,0,0.52359,0.851971, 0,0,0.627691,0.778462, 0,0,0.727374,0.686242, 0,0,0.817681,0.575671, 0,0,0.893841,0.448383, 0,0,0.95163,0.307246, 0,0,0.987725,0.156205, -0,-0,-1,4.37114e-08, -0,-0,-0.987725,0.156205, -0,-0,-0.95163,0.307246, -0,-0,-0.893841,0.448383, -0,-0,-0.817681,0.575672, -0,-0,-0.727374,0.686242, 0,0,-0.627691,0.778462, 0,0,-0.523589,0.851971, 0,0,-0.419875,0.907582, 0,0,-0.320943,0.947098, 0,0,-0.230616,0.973045, 0,0,-0.152065,0.98837, 0,0,-0.0878513,0.996134, 0,0,-0.0400156,0.999199, 0,0,-0.0102391,0.999948, 0,0,8.74228e-08,1],
+	"interpolation":"SLERP"
+},
+{
 	"type":"SCENE",
 	"name":"WaterTest.blend",
-	"roots":["Light", "Camera", "WaterPlane", "Rock1", "Rock2", "Rock3"]
+	"roots":["!SanFrancisco-cubemap-strip.png","Light", "Camera", "WaterPlane", "Rock1", "Rock2", "Rock3", "Rock1.001", "Rock1.002", "Plane"]
 }
 ]

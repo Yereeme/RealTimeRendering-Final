@@ -14,13 +14,52 @@ static uint32_t frag_code[] =
 #include "spv/water.frag.inl"
 ;
 
-void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_t subpass, VkDescriptorSetLayout transforms_set_layout) {
+void Tutorial::WaterPipeline::create(
+	RTG& rtg,
+	VkRenderPass render_pass,
+	uint32_t subpass,
+	VkDescriptorSetLayout transforms_set_layout
+) {
 	VkShaderModule vert_module = rtg.helpers.create_shader_module(vert_code);
 	VkShaderModule frag_module = rtg.helpers.create_shader_module(frag_code);
 
-	// step 2 layout:
+	// set 0 comes from object transforms SSBO
 	set0_Transforms = transforms_set_layout;
 	
+	// set 1 is water surface resources:
+	//  binding0: env cubemap
+	//  binding1: scene color
+	//  binding2: scene depth
+	{
+		std::array<VkDescriptorSetLayoutBinding, 3> bindings{
+			VkDescriptorSetLayoutBinding{
+				.binding = 0,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			},
+			VkDescriptorSetLayoutBinding{
+				.binding = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			},
+			VkDescriptorSetLayoutBinding{
+				.binding = 2,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			},
+		};
+
+		VkDescriptorSetLayoutCreateInfo set_layout_info{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.bindingCount = uint32_t(bindings.size()),
+			.pBindings = bindings.data(),
+		};
+		VK(vkCreateDescriptorSetLayout(rtg.device, &set_layout_info, nullptr, &set1_Surface));
+	}
+
 	{//push constants
 		VkPushConstantRange push_range{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -28,11 +67,11 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 			.size = sizeof(Tutorial::WaterPipeline::Push),
 		};
 
-		VkDescriptorSetLayout set_layouts[1] = { set0_Transforms };
+		VkDescriptorSetLayout set_layouts[2] = { set0_Transforms, set1_Surface };
 	 
 		VkPipelineLayoutCreateInfo create_info{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.setLayoutCount = 1,
+			.setLayoutCount = 2,
 			.pSetLayouts = set_layouts,
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = &push_range,
@@ -154,6 +193,11 @@ void Tutorial::WaterPipeline::create(RTG& rtg, VkRenderPass render_pass, uint32_
 }
 
 void Tutorial::WaterPipeline::destroy(RTG& rtg) {
+
+	if (set1_Surface != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(rtg.device, set1_Surface, nullptr);
+		set1_Surface = VK_NULL_HANDLE;
+	}
 	if (layout != VK_NULL_HANDLE) {
 		vkDestroyPipelineLayout(rtg.device, layout, nullptr);
 		layout = VK_NULL_HANDLE;

@@ -567,6 +567,40 @@ static S72::Environment const* find_active_environment(S72 const& scene, S72::No
 	return true;
 }
 
+[[maybe_unused]] static bool split_cube_faces_vertical_strip_linear8(
+	uint8_t const* pixels, int w, int h,
+	std::array<std::vector<float>, 6>& faces_out,
+	int& faceSizeOut
+) {
+	if (h != 6 * w) return false;
+
+	int s = w;
+	for (auto& f : faces_out) f.assign(size_t(s) * size_t(s) * 4, 0.0f);
+	faceSizeOut = s;
+
+	for (int face = 0; face < 6; ++face) {
+		auto& dst = faces_out[face];
+		int y0 = face * s;
+
+		for (int y = 0; y < s; ++y) {
+			for (int x = 0; x < s; ++x) {
+				uint8_t const* p = pixels + 4 * ((y0 + y) * w + x);
+				size_t o = 4 * (size_t(y) * size_t(s) + size_t(x));
+
+				// LDR fallback path:
+				// treat incoming pixels as linear 0..1 and set alpha to 1.
+				dst[o + 0] = float(p[0]) / 255.0f;
+				dst[o + 1] = float(p[1]) / 255.0f;
+				dst[o + 2] = float(p[2]) / 255.0f;
+				dst[o + 3] = 1.0f;
+			}
+		}
+	}
+
+	return true;
+}
+
+
  
 
  
@@ -948,10 +982,21 @@ VkDescriptorImageInfo brdf_info{
 			}
 			else {
 				// RGBE -> float faces
+				// Env strip -> float faces.
+				// If source has 3 channels, fall back to LDR decode to avoid
+				// treating opaque alpha(255) as RGBE exponent.
 				std::array<std::vector<float>, 6> faces_f;
 				int faceSize = 0;
+				bool ok = false;
+				if (n == 3) {
+					std::cout << "[A2] env source is RGB (n=3), using LDR fallback decode.\n";
+					ok = split_cube_faces_vertical_strip_linear8(pixels, w, h, faces_f, faceSize);
+				}
+				else {
+					ok = split_cube_faces_vertical_strip_rgbe(pixels, w, h, faces_f, faceSize);
+				}
 
-				if (!split_cube_faces_vertical_strip_rgbe(pixels, w, h, faces_f, faceSize)) {
+				if (!ok) {
 					std::cout << "[A2] env image not a 6x vertical strip: " << w << "x" << h << "\n";
 					has_env_texture = false;
 					stbi_image_free(pixels);
@@ -1367,6 +1412,65 @@ VkDescriptorImageInfo brdf_info{
 		VK(vkCreateFramebuffer(rtg.device, &fb_info, nullptr, &shadow_framebuffers[li]));
 	}
 
+	// Ensure shadow images start in a valid sampled layout even before any
+	// shadow pass has rendered to them (important when there are 0 spot lights).
+	{
+		VkCommandBuffer cmd = VK_NULL_HANDLE;
+		VkCommandBufferAllocateInfo alloc{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool = rtg.helpers.transfer_command_pool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+		VK(vkAllocateCommandBuffers(rtg.device, &alloc, &cmd));
+
+		VkCommandBufferBeginInfo begin{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		};
+		VK(vkBeginCommandBuffer(cmd, &begin));
+
+		for (auto const& shadow_map : shadow_maps) {
+			VkImageMemoryBarrier barrier{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = 0,
+				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+				.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = shadow_map.handle,
+				.subresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1,
+				},
+			};
+
+			vkCmdPipelineBarrier(
+				cmd,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+
+		VK(vkEndCommandBuffer(cmd));
+		VkSubmitInfo submit{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &cmd,
+		};
+		VK(vkQueueSubmit(rtg.graphics_queue, 1, &submit, VK_NULL_HANDLE));
+		VK(vkQueueWaitIdle(rtg.graphics_queue));
+		vkFreeCommandBuffers(rtg.device, rtg.helpers.transfer_command_pool, 1, &cmd);
+	}
+
 	 
 	{ //create render pass
 		//attachments:
@@ -1472,7 +1576,12 @@ VkDescriptorImageInfo brdf_info{
 		background_pipeline.set_layout,          // env layout
 		objects_pipeline.set1_Transforms         // transforms layout
 	);
-	water_pipeline.create(rtg, render_pass, 0, objects_pipeline.set1_Transforms);
+	water_pipeline.create(
+		rtg,
+		render_pass,
+		0,
+		objects_pipeline.set1_Transforms
+	);
 	shadow_pipeline.create(rtg, shadow_render_pass, 0);
 
 	 
@@ -3099,8 +3208,8 @@ VkDescriptorImageInfo brdf_info{
 			set2_count = uint32_t(textures.size());
 		}
 
-		const uint32_t extra_sets = 5;
-		const uint32_t extra_samplers = 10;
+		const uint32_t extra_sets = 6;
+		const uint32_t extra_samplers = 13;
 
 		std::array<VkDescriptorPoolSize, 1> pool_sizes{
 			VkDescriptorPoolSize{
@@ -3252,6 +3361,17 @@ VkDescriptorImageInfo brdf_info{
 
 			vkUpdateDescriptorSets(rtg.device, 1, &write, 0, nullptr);
 
+			// --- water: allocate set=1 surface descriptors (env + scene color + scene depth) ---
+			{
+				VkDescriptorSetAllocateInfo water_alloc_info{
+					.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+					.descriptorPool = texture_descriptor_pool,
+					.descriptorSetCount = 1,
+					.pSetLayouts = &water_pipeline.set1_Surface,
+				};
+				VK(vkAllocateDescriptorSets(rtg.device, &water_alloc_info, &water_surface_descriptors));
+			}
+
 			// --- A2-diffuse: allocate/write set=3 lambertian env descriptor ---
 			{
 				VkDescriptorSetAllocateInfo lam_alloc_info{
@@ -3386,99 +3506,101 @@ VkDescriptorImageInfo brdf_info{
 
 
 Tutorial::~Tutorial() {
-	//just in case rendering is still in flight, don't destroy resources:
-	//(not using VK macro to avoid throw-ing in destructor)
+
 
 	if (VkResult result = vkDeviceWaitIdle(rtg.device); result != VK_SUCCESS) {
 		std::cerr << "Failed to vkDeviceWaitIdle in Tutorial::~Tutorial [" << string_VkResult(result) << "]; continuing anyway." << std::endl;
 	}
 
 	// Samplers
-	if (env_sampler != VK_NULL_HANDLE) {
-		vkDestroySampler(rtg.device, env_sampler, nullptr);
-		env_sampler = VK_NULL_HANDLE;
+	if (swapchain_depth_image.handle != VK_NULL_HANDLE) {
+		destroy_framebuffers();
 	}
 
-	if (shadow_sampler != VK_NULL_HANDLE) {
-		vkDestroySampler(rtg.device, shadow_sampler, nullptr);
-		shadow_sampler = VK_NULL_HANDLE;
+	// Shadow resources
+	for (VkFramebuffer& fb : shadow_framebuffers) {
+		if (fb != VK_NULL_HANDLE) vkDestroyFramebuffer(rtg.device, fb, nullptr);
+		fb = VK_NULL_HANDLE;
 	}
 	// GGX Specular Cubemap
-	if (env_ggx_cubemap_view != VK_NULL_HANDLE) {
-		vkDestroyImageView(rtg.device, env_ggx_cubemap_view, nullptr);
-		env_ggx_cubemap_view = VK_NULL_HANDLE;
+	shadow_framebuffers.clear();
+	for (VkImageView& view : shadow_map_views) {
+		if (view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, view, nullptr);
+		view = VK_NULL_HANDLE;
 	}
+	shadow_map_views.clear();
+	for (auto& img : shadow_maps) rtg.helpers.destroy_image(std::move(img));
+	shadow_maps.clear();
+
+	// Views + images
+	if (env_ggx_cubemap_view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, env_ggx_cubemap_view, nullptr);
+	env_ggx_cubemap_view = VK_NULL_HANDLE;
 	rtg.helpers.destroy_image(std::move(env_ggx_cubemap));
 
 	// Lambertian Irradiance Cubemap
-	if (env_lambertian_cubemap_view != VK_NULL_HANDLE) {
-		vkDestroyImageView(rtg.device, env_lambertian_cubemap_view, nullptr);
-		env_lambertian_cubemap_view = VK_NULL_HANDLE;
-	}
+	if (env_lambertian_cubemap_view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, env_lambertian_cubemap_view, nullptr);
+	env_lambertian_cubemap_view = VK_NULL_HANDLE;
 	rtg.helpers.destroy_image(std::move(env_lambertian_cubemap));
 
 	// BRDF LUT
-	if (brdf_lut_view != VK_NULL_HANDLE) {
-		vkDestroyImageView(rtg.device, brdf_lut_view, nullptr);
-		brdf_lut_view = VK_NULL_HANDLE;
-	}
+	if (brdf_lut_view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, brdf_lut_view, nullptr);
+	brdf_lut_view = VK_NULL_HANDLE;
 	rtg.helpers.destroy_image(std::move(brdf_lut));
 
-	// Fallback/Dummy Cubemap
-	if (env_cubemap_view != VK_NULL_HANDLE) {
-		vkDestroyImageView(rtg.device, env_cubemap_view, nullptr);
-		env_cubemap_view = VK_NULL_HANDLE;
-	}
+	if (dummy_brdf_lut_view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, dummy_brdf_lut_view, nullptr);
+	dummy_brdf_lut_view = VK_NULL_HANDLE;
+	rtg.helpers.destroy_image(std::move(dummy_brdf_lut));
+
+	if (env_cubemap_view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, env_cubemap_view, nullptr);
+	env_cubemap_view = VK_NULL_HANDLE;
 	rtg.helpers.destroy_image(std::move(env_cubemap));
 
 	// Normal Maps
 	for (VkImageView& view : normal_map_views) {
-		vkDestroyImageView(rtg.device, view, nullptr);
+		if (view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, view, nullptr);
 		view = VK_NULL_HANDLE;
 	}
 	normal_map_views.clear();
 
-	for (auto& nm : normal_maps) {
-		rtg.helpers.destroy_image(std::move(nm));
-	}
+	for (auto& nm : normal_maps) rtg.helpers.destroy_image(std::move(nm));
 	normal_maps.clear();
 
-	// --- Standard Texture Cleanup ---
 
+
+	for (VkImageView& view : texture_views) {
+		if (view != VK_NULL_HANDLE) vkDestroyImageView(rtg.device, view, nullptr);
+		view = VK_NULL_HANDLE;
+	}
+	texture_views.clear();
+
+	for (auto& texture : textures) rtg.helpers.destroy_image(std::move(texture));
+	textures.clear();
+
+	// Samplers
 	if (texture_sampler != VK_NULL_HANDLE) {
 		vkDestroySampler(rtg.device, texture_sampler, nullptr);
 		texture_sampler = VK_NULL_HANDLE;
 	}
 
-	for (VkImageView& view : texture_views) {
-		vkDestroyImageView(rtg.device, view, nullptr);
-		view = VK_NULL_HANDLE;
+	if (env_sampler != VK_NULL_HANDLE) {
+		vkDestroySampler(rtg.device, env_sampler, nullptr);
+		env_sampler = VK_NULL_HANDLE;
 	}
-	texture_views.clear();
-
-	for (auto& texture : textures) {
-		rtg.helpers.destroy_image(std::move(texture));
+	if (shadow_sampler != VK_NULL_HANDLE) {
+		vkDestroySampler(rtg.device, shadow_sampler, nullptr);
+		shadow_sampler = VK_NULL_HANDLE;
 	}
-	textures.clear();
 
-	// --- Buffer & Pool Cleanup ---
-
+	// Buffers
 	rtg.helpers.destroy_buffer(std::move(object_vertices));
 
-	if (texture_descriptor_pool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(rtg.device, texture_descriptor_pool, nullptr);
-		texture_descriptor_pool = VK_NULL_HANDLE;
-	}
-
-	if (descriptor_pool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(rtg.device, descriptor_pool, nullptr);
-		descriptor_pool = VK_NULL_HANDLE;
-	}
-
 	for (Workspace& workspace : workspaces) {
-		if (workspace.command_buffer != VK_NULL_HANDLE) {
+		if (workspace.command_buffer != VK_NULL_HANDLE && command_pool != VK_NULL_HANDLE) {
 			vkFreeCommandBuffers(rtg.device, command_pool, 1, &workspace.command_buffer);
+			workspace.command_buffer = VK_NULL_HANDLE;
 		}
+		rtg.helpers.destroy_buffer(std::move(workspace.lines_vertices_src));
+		rtg.helpers.destroy_buffer(std::move(workspace.lines_vertices));
 		rtg.helpers.destroy_buffer(std::move(workspace.Camera_src));
 		rtg.helpers.destroy_buffer(std::move(workspace.Camera));
 		rtg.helpers.destroy_buffer(std::move(workspace.World_src));
@@ -3488,101 +3610,42 @@ Tutorial::~Tutorial() {
 	}
 	workspaces.clear();
 
-	// --- Pipeline & Pass Cleanup ---
-
-	background_pipeline.destroy(rtg);
-	lines_pipeline.destroy(rtg);
-	objects_pipeline.destroy(rtg);
-	pbr_pipeline.destroy(rtg);
-	mirror_pipeline.destroy(rtg);
-	water_pipeline.destroy(rtg);
-
-	if (command_pool != VK_NULL_HANDLE) {
-		vkDestroyCommandPool(rtg.device, command_pool, nullptr);
-		command_pool = VK_NULL_HANDLE;
-	}
-
-	if (render_pass != VK_NULL_HANDLE) {
-		vkDestroyRenderPass(rtg.device, render_pass, nullptr);
-		render_pass = VK_NULL_HANDLE;
-	}
-
-	if (swapchain_depth_image.handle != VK_NULL_HANDLE) {
-		destroy_framebuffers();
-	}
-
-	for (Workspace &workspace : workspaces) {
-
-
-		 
-		if (workspace.command_buffer != VK_NULL_HANDLE) {
-			vkFreeCommandBuffers(rtg.device,  command_pool, 1, &workspace.command_buffer);
-			workspace.command_buffer = VK_NULL_HANDLE;
-		}
-
-		//cleaning up per-workspace lines buffers in Tutorial::~Tutorial
-		if (workspace.lines_vertices_src.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.lines_vertices_src));
-		}
-		if (workspace.lines_vertices.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.lines_vertices));
-		}
-
-		if (workspace.Camera_src.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.Camera_src));
-		}
-		if (workspace.Camera.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.Camera));
-		}
-
-		//Camera_descriptors freed when pool is destroyed.
-
-		if (workspace.World_src.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.World_src));
-		}
-		if (workspace.World.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.World));
-		}
-		//World_descriptors freed when pool is destroyed.
-
-		
-
-		if (workspace.Transforms_src.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.Transforms_src));
-		}
-		if (workspace.Transforms.handle != VK_NULL_HANDLE) {
-			rtg.helpers.destroy_buffer(std::move(workspace.Transforms));
-		}
-		//Transforms_descriptor freed when pool is destroyed
-
-	}
+	// Pools
+	if (texture_descriptor_pool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(rtg.device, texture_descriptor_pool, nullptr);
+		texture_descriptor_pool = VK_NULL_HANDLE;
+}
 
 	
-	workspaces.clear();
+	 
 
-	if (descriptor_pool) {
+	if (descriptor_pool != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(rtg.device, descriptor_pool, nullptr);
-		descriptor_pool = nullptr;
-		//(this also frees the descriptor sets allocated from the pool)
+		descriptor_pool = VK_NULL_HANDLE;
 	}
 
-	//destroy pipeline (sequenced in opposite order of construction)
-
-	background_pipeline.destroy(rtg);
-	lines_pipeline.destroy(rtg);
-	objects_pipeline.destroy(rtg);
-	pbr_pipeline.destroy(rtg);
-	mirror_pipeline.destroy(rtg);
+	// Pipelines destroy
+	shadow_pipeline.destroy(rtg);
 	water_pipeline.destroy(rtg);
+	mirror_pipeline.destroy(rtg);
+	pbr_pipeline.destroy(rtg);
+	objects_pipeline.destroy(rtg);
+	lines_pipeline.destroy(rtg);
+	background_pipeline.destroy(rtg);
 
 
 	//destroy command pool
+	// Command pool + render passes
 	if (command_pool != VK_NULL_HANDLE) {
 		vkDestroyCommandPool(rtg.device, command_pool, nullptr);
 		command_pool = VK_NULL_HANDLE;
 	}
 
-	if (render_pass != VK_NULL_HANDLE) { //cleanup
+	if (shadow_render_pass != VK_NULL_HANDLE) {
+		vkDestroyRenderPass(rtg.device, shadow_render_pass, nullptr);
+		shadow_render_pass = VK_NULL_HANDLE;
+	}
+	if (render_pass != VK_NULL_HANDLE) {
 		vkDestroyRenderPass(rtg.device, render_pass, nullptr);
 		render_pass = VK_NULL_HANDLE;
 	}
@@ -4417,13 +4480,62 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 				VkDeviceSize offsets[1] = { 0 };
 				vkCmdBindVertexBuffers(workspace.command_buffer, 0, 1, vertex_buffers, offsets);
 
+				// Update water surface descriptors for this frame's swapchain image.
+				VkDescriptorImageInfo water_env_info{
+					.sampler = env_sampler,
+					.imageView = env_cubemap_view,
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				};
+				VkDescriptorImageInfo water_scene_color_info{
+	.sampler = texture_sampler,
+	.imageView = rtg.swapchain_image_views[render_params.image_index],
+	.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				};
+				VkDescriptorImageInfo water_scene_depth_info{
+					.sampler = texture_sampler,
+					.imageView = swapchain_depth_image_view,
+					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+				};
+				std::array<VkWriteDescriptorSet, 3> water_writes{
+					VkWriteDescriptorSet{
+						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+						.dstSet = water_surface_descriptors,
+						.dstBinding = 0,
+						.descriptorCount = 1,
+						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						.pImageInfo = &water_env_info,
+					},
+					VkWriteDescriptorSet{
+						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+						.dstSet = water_surface_descriptors,
+						.dstBinding = 1,
+						.descriptorCount = 1,
+						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						.pImageInfo = &water_scene_color_info,
+					},
+					VkWriteDescriptorSet{
+						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+						.dstSet = water_surface_descriptors,
+						.dstBinding = 2,
+						.descriptorCount = 1,
+						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						.pImageInfo = &water_scene_depth_info,
+					},
+				};
+				vkUpdateDescriptorSets(rtg.device, uint32_t(water_writes.size()), water_writes.data(), 0, nullptr);
+
+				VkDescriptorSet water_sets[2] = {
+					workspace.Transforms_descriptors, // set 0: transforms
+					water_surface_descriptors         // set 1: env + scene color + scene depth
+				};
+
 				vkCmdBindDescriptorSets(
 					workspace.command_buffer,
 					VK_PIPELINE_BIND_POINT_GRAPHICS,
 					water_pipeline.layout,
 					0,
-					1,
-					&workspace.Transforms_descriptors,
+					2,
+					water_sets,
 					0,
 					nullptr
 				);

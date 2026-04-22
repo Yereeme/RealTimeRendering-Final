@@ -201,6 +201,7 @@ struct Tutorial : RTG::Application {
 	//WaterPipeline (step 1: flat-color pass wiring)
 	struct WaterPipeline {
 		VkDescriptorSetLayout set0_Transforms = VK_NULL_HANDLE;
+		VkDescriptorSetLayout set1_Surface = VK_NULL_HANDLE;
 		 //push constants
 
 		struct Push {
@@ -227,7 +228,12 @@ struct Tutorial : RTG::Application {
 		using Vertex = PosNorTexVertex;
 		VkPipeline handle = VK_NULL_HANDLE;
 
-		void create(RTG& RTG, VkRenderPass render_pass, uint32_t subpass, VkDescriptorSetLayout transforms_set_layout);
+		void create(
+			RTG& RTG,
+			VkRenderPass render_pass,
+			uint32_t subpass,
+			VkDescriptorSetLayout transforms_set_layout
+		);
 
 		void destroy(RTG& RTG);
 	} water_pipeline;
@@ -485,6 +491,8 @@ struct Tutorial : RTG::Application {
 	bool has_brdf_lut = false;
 
 	VkDescriptorSet env_pbr_descriptors = VK_NULL_HANDLE; // set=3 for PBRPipeline
+
+	VkDescriptorSet water_surface_descriptors = VK_NULL_HANDLE; // set=1 for WaterPipeline
 
 	Helpers::AllocatedImage dummy_brdf_lut;
 	VkImageView dummy_brdf_lut_view = VK_NULL_HANDLE;
