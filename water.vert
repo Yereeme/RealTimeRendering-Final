@@ -21,9 +21,10 @@ float foam_strength;
 // proxy depth coloring controls (used in fragment stage)
 float depth_near;
 float depth_far;
+float clip_near;
+float clip_far;
 // keep 16-byte layout (matches C++ push struct)
-float _pad0;
-float _pad1;
+ 
 float _pad2;
 float _pad3;
 }uWater;

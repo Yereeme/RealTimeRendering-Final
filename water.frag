@@ -8,8 +8,8 @@ float wave_strength;
 float foam_strength;
 float depth_near; //proxy start distance for shallow->deep transition
 float depth_far;
-float _pad0;
-float _pad1;
+float clip_near; //camera near plane (for depth linearization)
+float clip_far;  //camera far plane (for depth linearization)
 float _pad2;
 float _pad3;
 }uWater;
@@ -48,6 +48,12 @@ float noise2(vec2 p) {
 	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// Convert hardware depth (0..1, non-linear) into view-space distance.
+//  depth buffer packs far distances tightly; this "unpacks" them.
+float linearize_depth(float depth01, float z_near, float z_far) {
+	float z_ndc = depth01 * 2.0 - 1.0;
+	return (2.0 * z_near * z_far) / max(z_far + z_near - z_ndc * (z_far - z_near), 1e-6);
+}
  void main(){
  // Stable geometric normal from the vertex-stage Gerstner derivatives.
 	// Blend in scrolling normal-map micro detail in projected XZ space.
@@ -105,10 +111,13 @@ float noise2(vec2 p) {
 	vec3 scene_refracted = texture(sceneColorTex, refr_uv).rgb;
 
 	// Depth intersection proxy from current-fragment depth vs refracted scene depth.
+	// Use linearized depth so shoreline/intersection behavior is stable with distance.
 	float scene_depth = texture(sceneDepthTex, refr_uv).r;
 	float surface_depth = gl_FragCoord.z;
-	float depth_delta = clamp(scene_depth - surface_depth, 0.0, 1.0);
-	float thickness_t = smoothstep(0.001, 0.040, depth_delta);
+	float scene_depth_lin = linearize_depth(scene_depth, uWater.clip_near, uWater.clip_far);
+	float surface_depth_lin = linearize_depth(surface_depth, uWater.clip_near, uWater.clip_far);
+	float depth_delta = max(scene_depth_lin - surface_depth_lin, 0.0);
+	float thickness_t = smoothstep(0.02, 0.75, depth_delta);
 
 	// Blend a bit of env-based transmission for stability near screen edges / missing detail.
 	vec3 refraction_env = texture(envTex, T).rgb;

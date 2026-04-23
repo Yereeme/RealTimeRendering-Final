@@ -1472,33 +1472,31 @@ VkDescriptorImageInfo brdf_info{
 	}
 
 	 
-	{ //create render pass
-		//attachments:
-		std::array< VkAttachmentDescription, 2 > attachments{
-			VkAttachmentDescription{ //0 - color attachment:
-				.format = rtg.surface_format.format, //DEFINE FORMAT
+	{ // create scene_render_pass (offscreen color + depth)
+		std::array<VkAttachmentDescription, 2> attachments{
+			VkAttachmentDescription{
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, //LOADOP LOAD THE DATA
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE, //how to write data back after rendering
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, //LAYOUT IMAGE TRANSITIONED TO BEFORE THE LOAD
-				.finalLayout = rtg.present_layout, //layout image is transitioned to after the store
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			     
 			},
 			VkAttachmentDescription{ //1 - depth attachment:
 				.format = depth_format,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-				},
+				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+			},
 		};
 
-		// subpass ( parts of the rendering that can proceed (potentially) in parallel)
+	 
 		VkAttachmentReference color_attachment_ref{
 			.attachment = 0,
 			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1511,34 +1509,13 @@ VkDescriptorImageInfo brdf_info{
 
 		VkSubpassDescription subpass{
 			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-			.inputAttachmentCount = 0,
-			.pInputAttachments = nullptr,
+			 
 			.colorAttachmentCount = 1,
 			.pColorAttachments = &color_attachment_ref,
 			.pDepthStencilAttachment = &depth_attachment_ref,
 		};
 
-		//dependencies
-		//this defers the image load actions for the attachments:
-		std::array< VkSubpassDependency, 2> dependencies{
-			VkSubpassDependency{
-				.srcSubpass = VK_SUBPASS_EXTERNAL,
-				.dstSubpass = 0,
-				.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				.srcAccessMask = 0,
-				.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-				},
-				VkSubpassDependency{
-				.srcSubpass = VK_SUBPASS_EXTERNAL,
-				.dstSubpass = 0,
-				.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.srcAccessMask = 0,
-				.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				}
-		};
-
+		 
 
 		VkRenderPassCreateInfo create_info{
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -1546,11 +1523,42 @@ VkDescriptorImageInfo brdf_info{
 			.pAttachments = attachments.data(),
 			.subpassCount = 1,
 			.pSubpasses = &subpass,
-			.dependencyCount = uint32_t(dependencies.size()),
-			.pDependencies = dependencies.data(),
+			 
 		};
 
-		VK(vkCreateRenderPass(rtg.device, &create_info, nullptr, &render_pass));
+		VK(vkCreateRenderPass(rtg.device, &create_info, nullptr, &scene_render_pass));
+	}
+
+	{ // create present_render_pass (load swapchain color and overlay water)
+		VkAttachmentDescription color_attachment{
+			.format = rtg.surface_format.format,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.finalLayout = rtg.present_layout,
+		};
+
+		VkAttachmentReference color_attachment_ref{
+			.attachment = 0,
+			.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		};
+		VkSubpassDescription subpass{
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.colorAttachmentCount = 1,
+			.pColorAttachments = &color_attachment_ref,
+		};
+		VkRenderPassCreateInfo create_info{
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			.attachmentCount = 1,
+			.pAttachments = &color_attachment,
+			.subpassCount = 1,
+			.pSubpasses = &subpass,
+		};
+		VK(vkCreateRenderPass(rtg.device, &create_info, nullptr, &present_render_pass));
+		 
 	}
 
 	
@@ -1565,20 +1573,20 @@ VkDescriptorImageInfo brdf_info{
 
 	//calling create function fron tutorial.hppp
 
-	background_pipeline.create(rtg, render_pass, 0);
-	lines_pipeline.create(rtg, render_pass, 0);
-	objects_pipeline.create(rtg, render_pass, 0);
-	pbr_pipeline.create(rtg, render_pass, 0);
+	background_pipeline.create(rtg, scene_render_pass, 0);
+	lines_pipeline.create(rtg, scene_render_pass, 0);
+	objects_pipeline.create(rtg, scene_render_pass, 0);
+	pbr_pipeline.create(rtg, scene_render_pass, 0);
 	mirror_pipeline.create(
 		rtg,
-		render_pass,
+		scene_render_pass,
 		0,
 		background_pipeline.set_layout,          // env layout
 		objects_pipeline.set1_Transforms         // transforms layout
 	);
 	water_pipeline.create(
 		rtg,
-		render_pass,
+		present_render_pass,
 		0,
 		objects_pipeline.set1_Transforms
 	);
@@ -3650,9 +3658,13 @@ Tutorial::~Tutorial() {
 		vkDestroyRenderPass(rtg.device, shadow_render_pass, nullptr);
 		shadow_render_pass = VK_NULL_HANDLE;
 	}
-	if (render_pass != VK_NULL_HANDLE) {
-		vkDestroyRenderPass(rtg.device, render_pass, nullptr);
-		render_pass = VK_NULL_HANDLE;
+	if (scene_render_pass != VK_NULL_HANDLE) {
+		vkDestroyRenderPass(rtg.device, scene_render_pass, nullptr);
+		scene_render_pass = VK_NULL_HANDLE;
+	}
+	if (present_render_pass != VK_NULL_HANDLE) {
+		vkDestroyRenderPass(rtg.device, present_render_pass, nullptr);
+		present_render_pass = VK_NULL_HANDLE;
 	}
 }
 
@@ -3666,7 +3678,7 @@ void Tutorial::on_swapchain(RTG &rtg_, RTG::SwapchainEvent const &swapchain) {
 		swapchain.extent,
 		depth_format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		Helpers::Unmapped
 	);
@@ -3689,36 +3701,95 @@ void Tutorial::on_swapchain(RTG &rtg_, RTG::SwapchainEvent const &swapchain) {
 		VK(vkCreateImageView(rtg.device, &create_info, nullptr, &swapchain_depth_image_view));
 	}
 
-	//create framebuffers pointing to each swapchain image view and the shared depth image view
-	//framebuffers for each swapchain image:
-	swapchain_framebuffers.assign(swapchain.image_views.size(), VK_NULL_HANDLE);
+	scene_color_images.clear();
+	scene_color_image_views.clear();
+	scene_framebuffers.assign(swapchain.image_views.size(), VK_NULL_HANDLE);
+	present_framebuffers.assign(swapchain.image_views.size(), VK_NULL_HANDLE);
+	scene_color_images.reserve(swapchain.image_views.size());
+	scene_color_image_views.reserve(swapchain.image_views.size());
 	for (size_t i = 0; i < swapchain.image_views.size(); ++i) {
+		scene_color_images.emplace_back(
+			rtg.helpers.create_image(
+				swapchain.extent,
+				rtg.surface_format.format,
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				Helpers::Unmapped
+			)
+		);
+		VkImageView scene_color_view = VK_NULL_HANDLE;
+		VkImageViewCreateInfo scene_color_view_info{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = scene_color_images.back().handle,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = rtg.surface_format.format,
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+		};
+		VK(vkCreateImageView(rtg.device, &scene_color_view_info, nullptr, &scene_color_view));
+		scene_color_image_views.emplace_back(scene_color_view);
 		std::array< VkImageView, 2 > attachments{
-			swapchain.image_views[i],
+			scene_color_image_views[i],
 			swapchain_depth_image_view,
 		};
 		VkFramebufferCreateInfo create_info{
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-			.renderPass = render_pass,
+			.renderPass = scene_render_pass,
 			.attachmentCount = uint32_t(attachments.size()),
 			.pAttachments = attachments.data(),
 			.width = swapchain.extent.width,
 			.height = swapchain.extent.height,
 			.layers = 1,
 		};
+		VK(vkCreateFramebuffer(rtg.device, &create_info, nullptr, &scene_framebuffers[i]));
 
-		VK(vkCreateFramebuffer(rtg.device, &create_info, nullptr, &swapchain_framebuffers[i]));
+		VkFramebufferCreateInfo present_fb_info{
+			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			.renderPass = present_render_pass,
+			.attachmentCount = 1,
+			.pAttachments = &swapchain.image_views[i],
+			.width = swapchain.extent.width,
+			.height = swapchain.extent.height,
+			.layers = 1,
+		};
+		VK(vkCreateFramebuffer(rtg.device, &present_fb_info, nullptr, &present_framebuffers[i]));
 	}
 }
 
 void Tutorial::destroy_framebuffers() {
 	 
-	for (VkFramebuffer& framebuffer : swapchain_framebuffers) {
-		assert(framebuffer != VK_NULL_HANDLE);
-		vkDestroyFramebuffer(rtg.device, framebuffer, nullptr);
-		framebuffer = VK_NULL_HANDLE;
+	for (VkFramebuffer& framebuffer : scene_framebuffers) {
+		if (framebuffer != VK_NULL_HANDLE) {
+			vkDestroyFramebuffer(rtg.device, framebuffer, nullptr);
+			framebuffer = VK_NULL_HANDLE;
+		}
 	}
-	swapchain_framebuffers.clear();
+	scene_framebuffers.clear();
+	for (VkFramebuffer& framebuffer : present_framebuffers) {
+		if (framebuffer != VK_NULL_HANDLE) {
+			vkDestroyFramebuffer(rtg.device, framebuffer, nullptr);
+			framebuffer = VK_NULL_HANDLE;
+		}
+	}
+	present_framebuffers.clear();
+
+	for (VkImageView& iv : scene_color_image_views) {
+		if (iv != VK_NULL_HANDLE) {
+			vkDestroyImageView(rtg.device, iv, nullptr);
+			iv = VK_NULL_HANDLE;
+		}
+	}
+	scene_color_image_views.clear();
+	for (auto& img : scene_color_images) {
+		rtg.helpers.destroy_image(std::move(img));
+	}
+	scene_color_images.clear();
 
 	assert(swapchain_depth_image_view != VK_NULL_HANDLE);
 	vkDestroyImageView(rtg.device, swapchain_depth_image_view, nullptr);
@@ -3732,11 +3803,13 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 	//assert that parameters are valid:
 	assert(&rtg == &rtg_);
 	assert(render_params.workspace_index < workspaces.size());
-	assert(render_params.image_index < swapchain_framebuffers.size());
+	assert(render_params.image_index < scene_framebuffers.size());
+	assert(render_params.image_index < present_framebuffers.size());
 
 	//get more convenient names for the current workspace and target framebuffer:
 	Workspace& workspace = workspaces[render_params.workspace_index];
-	VkFramebuffer framebuffer = swapchain_framebuffers[render_params.image_index];
+	VkFramebuffer scene_framebuffer = scene_framebuffers[render_params.image_index];
+	VkFramebuffer present_framebuffer = present_framebuffers[render_params.image_index];
 
 	//reset the command buffer (clear old commands):
 	VK(vkResetCommandBuffer(workspace.command_buffer, 0));
@@ -4125,8 +4198,8 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 
 		VkRenderPassBeginInfo begin_info{
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-			.renderPass = render_pass,
-			.framebuffer = framebuffer,
+			.renderPass = scene_render_pass,
+			.framebuffer = scene_framebuffer,
 			.renderArea{
 				.offset = {.x = 0, .y = 0},
 				.extent = rtg.swapchain_extent,
@@ -4468,17 +4541,132 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 			}
 		}
 
-		{// --- WATER PASS (mesh-only) ---
-			if (!water_instance_indices.empty()) {
-				vkCmdBindPipeline(
-					workspace.command_buffer,
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
-					water_pipeline.handle
-				);
+		vkCmdEndRenderPass(workspace.command_buffer);
 
-			// 2) set viewport/scissor
-				vkCmdSetViewport(workspace.command_buffer, 0, 1, &draw_viewport);
-				vkCmdSetScissor(workspace.command_buffer, 0, 1, &draw_scissor);
+		// Copy the offscreen scene color into the swapchain image before water overlay.
+		{
+			VkImageMemoryBarrier copy_barriers[2]{
+				VkImageMemoryBarrier{
+					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+					.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+					.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.image = scene_color_images[render_params.image_index].handle,
+					.subresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0,
+						.levelCount = 1,
+						.baseArrayLayer = 0,
+						.layerCount = 1,
+					},
+				},
+				VkImageMemoryBarrier{
+					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+					.srcAccessMask = 0,
+					.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+					.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.image = rtg.swapchain_images[render_params.image_index],
+					.subresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0,
+						.levelCount = 1,
+						.baseArrayLayer = 0,
+						.layerCount = 1,
+					},
+				}
+			};
+			vkCmdPipelineBarrier(
+				workspace.command_buffer,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0, 0, nullptr, 0, nullptr, 2, copy_barriers
+			);
+
+			VkImageCopy copy_region{
+				.srcSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+				.srcOffset{0, 0, 0},
+				.dstSubresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+				.dstOffset{0, 0, 0},
+				.extent{rtg.swapchain_extent.width, rtg.swapchain_extent.height, 1},
+			};
+			vkCmdCopyImage(
+				workspace.command_buffer,
+				scene_color_images[render_params.image_index].handle,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				rtg.swapchain_images[render_params.image_index],
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&copy_region
+			);
+
+			VkImageMemoryBarrier after_copy_barriers[2]{
+				VkImageMemoryBarrier{
+					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+					.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+					.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.image = scene_color_images[render_params.image_index].handle,
+					.subresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0,
+						.levelCount = 1,
+						.baseArrayLayer = 0,
+						.layerCount = 1,
+					},
+				},
+				VkImageMemoryBarrier{
+					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+					.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+					.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.image = rtg.swapchain_images[render_params.image_index],
+					.subresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0,
+						.levelCount = 1,
+						.baseArrayLayer = 0,
+						.layerCount = 1,
+					},
+				}
+			};
+			vkCmdPipelineBarrier(
+				workspace.command_buffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				0, 0, nullptr, 0, nullptr, 2, after_copy_barriers
+			);
+		}
+
+		// Present pass: overlay water over copied scene color.
+		{
+			VkRenderPassBeginInfo present_begin_info{
+				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+				.renderPass = present_render_pass,
+				.framebuffer = present_framebuffer,
+				.renderArea{
+					.offset = {.x = 0, .y = 0},
+					.extent = rtg.swapchain_extent,
+				},
+				.clearValueCount = 0,
+				.pClearValues = nullptr,
+			};
+			vkCmdBeginRenderPass(workspace.command_buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+			//  set viewport/scissor
+			if (!water_instance_indices.empty()) {
+				vkCmdBindPipeline(workspace.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, water_pipeline.handle);
 
 			//  
 				VkBuffer vertex_buffers[1] = { object_vertices.handle };
@@ -4493,7 +4681,7 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 				};
 				VkDescriptorImageInfo water_scene_color_info{
 					.sampler = texture_sampler,
-					.imageView = rtg.swapchain_image_views[render_params.image_index],
+					.imageView = scene_color_image_views[render_params.image_index],
 					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				};
 				VkDescriptorImageInfo water_scene_depth_info{
@@ -4511,92 +4699,82 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				};
 				std::array<VkWriteDescriptorSet, 4> water_writes{
-					VkWriteDescriptorSet{
-						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-						.dstSet = water_surface_descriptors,
-						.dstBinding = 0,
-						.descriptorCount = 1,
-						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						.pImageInfo = &water_env_info,
-					},
-					VkWriteDescriptorSet{
-						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-						.dstSet = water_surface_descriptors,
-						.dstBinding = 1,
-						.descriptorCount = 1,
-						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						.pImageInfo = &water_scene_color_info,
-					},
-					VkWriteDescriptorSet{
-						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-						.dstSet = water_surface_descriptors,
-						.dstBinding = 2,
-						.descriptorCount = 1,
-						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						.pImageInfo = &water_scene_depth_info,
-					},
-					VkWriteDescriptorSet{
-						.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-						.dstSet = water_surface_descriptors,
-						.dstBinding = 3,
-						.descriptorCount = 1,
-						.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-						.pImageInfo = &water_normal_info,
-					},
+					VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+					.dstSet = water_surface_descriptors, 
+					.dstBinding = 0, 
+					.descriptorCount = 1, 
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					.pImageInfo = &water_env_info
+				},
+					VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, 
+					.dstSet = water_surface_descriptors, 
+					.dstBinding = 1, .descriptorCount = 1, 
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					.pImageInfo = &water_scene_color_info
+				},
+					VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, 
+					.dstSet = water_surface_descriptors, .dstBinding = 2, 
+					.descriptorCount = 1, 
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					.pImageInfo = &water_scene_depth_info
+				},
+					VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, 
+					.dstSet = water_surface_descriptors, 
+					.dstBinding = 3, 
+					.descriptorCount = 1, 
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+					.pImageInfo = &water_normal_info
+				},
 				};
 				vkUpdateDescriptorSets(rtg.device, uint32_t(water_writes.size()), water_writes.data(), 0, nullptr);
 
-				VkDescriptorSet water_sets[2] = {
-					workspace.Transforms_descriptors, // set 0: transforms
-					water_surface_descriptors         // set 1: env + scene color + scene depth + detail normal
+				VkDescriptorSet water_sets[2] = { workspace.Transforms_descriptors, 
+					water_surface_descriptors 
 				};
+				vkCmdBindDescriptorSets(workspace.command_buffer,
+					VK_PIPELINE_BIND_POINT_GRAPHICS, 
+					water_pipeline.layout, 
+					0, 
+					2, 
+					water_sets, 
+					0, 
+					nullptr);
 
-				vkCmdBindDescriptorSets(
-					workspace.command_buffer,
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
-					water_pipeline.layout,
-					0,
-					2,
-					water_sets,
-					0,
-					nullptr
-				);
+				 
 
 				//push constants
 				WaterPipeline::Push water_push{};
 				mat4 view_to_world_water = mat4_inverse_rigid(this->VIEW_FROM_WORLD);
-				water_push.camera_ws = {
+				water_push.camera_ws = { 
 					view_to_world_water[12],
 					view_to_world_water[13],
-					view_to_world_water[14]
+					view_to_world_water[14] 
 				};
 				water_push.time = time;
 				water_push.wave_strength = 1.0f;
 				water_push.foam_strength = 0.55f;
 				water_push.depth_near = 2.0f;
 				water_push.depth_far = 25.0f;
-				water_push._pad0 = 0.0f;
-				water_push._pad1 = 0.0f;
-				water_push._pad2 = 0.0f;
-				water_push._pad3 = 0.0f;
-
-				vkCmdPushConstants(
-					workspace.command_buffer,
-					water_pipeline.layout,
+				 
+				water_push.clip_near = cam.near;
+				water_push.clip_far = cam.far;
+				vkCmdPushConstants(workspace.command_buffer, 
+					water_pipeline.layout, 
 					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					0,
+					0, 
 					sizeof(WaterPipeline::Push),
-					&water_push
-				);
+					&water_push);
 
+			 
 
 				for (uint32_t idx : water_instance_indices) {
 					ObjectInstance const& inst = object_instances[idx];
 					vkCmdDraw(workspace.command_buffer, inst.vertices.count, 1, inst.vertices.first, idx);
 				}
 			}
+			vkCmdEndRenderPass(workspace.command_buffer);
 		}
-		vkCmdEndRenderPass(workspace.command_buffer);
+		 
 	}
 
 	//end recording:

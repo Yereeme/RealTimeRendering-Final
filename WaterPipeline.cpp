@@ -113,7 +113,7 @@ void Tutorial::WaterPipeline::create(
 	// Water is now mesh-based,
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_state{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-			.depthTestEnable = VK_TRUE,
+			.depthTestEnable = VK_FALSE,
 		.depthWriteEnable = VK_FALSE,
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.depthBoundsTestEnable = VK_FALSE,

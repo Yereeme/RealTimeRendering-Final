@@ -47,7 +47,11 @@ struct Tutorial : RTG::Application {
 	//chosen format for depth buffer:
 	VkFormat depth_format{};
 	//Render passes describe how pipelines write to images:
-	VkRenderPass render_pass = VK_NULL_HANDLE;
+		//Render passes:
+	// - scene_render_pass: opaque scene into offscreen color + shared depth
+	// - present_render_pass: overlay water onto swapchain image
+	VkRenderPass scene_render_pass = VK_NULL_HANDLE;
+	VkRenderPass present_render_pass = VK_NULL_HANDLE;
 
 	VkRenderPass shadow_render_pass = VK_NULL_HANDLE;
 
@@ -216,8 +220,10 @@ struct Tutorial : RTG::Application {
 
 			float depth_far; //proxy end distance for shallow->deep transition
 
-			float _pad0;
-			float _pad1; //keep size 16-byte aligned
+			// Camera clip planes passed to shader for depth linearization.
+			//  these convert "compressed depth buffer numbers" back to real distance.
+			float clip_near;
+			float clip_far; //keep size 16-byte aligned
 			float _pad2;
 			float _pad3; //keep size 16-byte aligned
 
@@ -404,7 +410,10 @@ struct Tutorial : RTG::Application {
 
 	Helpers::AllocatedImage swapchain_depth_image;
 	VkImageView swapchain_depth_image_view = VK_NULL_HANDLE;
-	std::vector< VkFramebuffer > swapchain_framebuffers;
+	std::vector<Helpers::AllocatedImage> scene_color_images;
+	std::vector<VkImageView> scene_color_image_views;
+	std::vector< VkFramebuffer > scene_framebuffers;
+	std::vector< VkFramebuffer > present_framebuffers;
 
 	//used from on_swapchain and the destructor: (framebuffers are created in on_swapchain)
 	void destroy_framebuffers();
