@@ -1475,6 +1475,7 @@ VkDescriptorImageInfo brdf_info{
 	{ // create scene_render_pass (offscreen color + depth)
 		std::array<VkAttachmentDescription, 2> attachments{
 			VkAttachmentDescription{
+				.format = rtg.surface_format.format,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -4652,17 +4653,17 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 		// Present pass: overlay water over copied scene color.
 		{
 			VkRenderPassBeginInfo present_begin_info{
-				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				.renderPass = present_render_pass,
-				.framebuffer = present_framebuffer,
+					.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+					.renderPass = present_render_pass,
+					.framebuffer = present_framebuffer,
 				.renderArea{
 					.offset = {.x = 0, .y = 0},
 					.extent = rtg.swapchain_extent,
 				},
-				.clearValueCount = 0,
-				.pClearValues = nullptr,
+					.clearValueCount = 0,
+					.pClearValues = nullptr,
 			};
-			vkCmdBeginRenderPass(workspace.command_buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(workspace.command_buffer, &present_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
 			//  set viewport/scissor
 			if (!water_instance_indices.empty()) {
@@ -4756,15 +4757,45 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 				water_push.depth_near = 2.0f;
 				water_push.depth_far = 25.0f;
 				 
-				water_push.clip_near = cam.near;
-				water_push.clip_far = cam.far;
+		 
+		 
+
+				// Pull clip planes directly from the currently active camera mode.
+				// Shoreline/intersection foam band over linearized depth delta.
+				// Smaller near/far => tighter foam around contact edges.
+				water_push.shoreline_delta_near = 0.02f;
+				water_push.shoreline_delta_far = 0.75f;
+				// Pull clip planes directly from the currently active camera mode.
+				float clip_near = 0.1f;
+				float clip_far = 1000.0f;
+				if (camera_mode == CameraMode::Debug) {
+					clip_near = debug_camera.near;
+					clip_far = debug_camera.far;
+				}
+				else if (camera_mode == CameraMode::User) {
+					clip_near = free_camera.near;
+					clip_far = free_camera.far;
+				}
+				else if (camera_mode == CameraMode::Scene && !scene_camera_nodes.empty()) {
+					S72::Node const& cam_node = *scene_camera_nodes[std::min(active_scene_camera, uint32_t(scene_camera_nodes.size() - 1))];
+					if (cam_node.camera) {
+						if (auto const* persp = std::get_if<S72::Camera::Perspective>(&cam_node.camera->projection)) {
+							clip_near = persp->near;
+							clip_far = persp->far;
+						}
+					}
+					if (!std::isfinite(clip_near) || clip_near <= 0.0f) clip_near = 0.1f;
+					if (!std::isfinite(clip_far) || clip_far <= clip_near) clip_far = 1000.0f;
+				}
+				water_push.clip_near = clip_near;
+				water_push.clip_far = clip_far;
 				vkCmdPushConstants(workspace.command_buffer, 
 					water_pipeline.layout, 
-					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
 					0, 
-					sizeof(WaterPipeline::Push),
-					&water_push);
-
+					sizeof(WaterPipeline::Push), 
+					&water_push
+				);
 			 
 
 				for (uint32_t idx : water_instance_indices) {

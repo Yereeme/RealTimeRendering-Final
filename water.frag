@@ -10,8 +10,8 @@ float depth_near; //proxy start distance for shallow->deep transition
 float depth_far;
 float clip_near; //camera near plane (for depth linearization)
 float clip_far;  //camera far plane (for depth linearization)
-float _pad2;
-float _pad3;
+float shoreline_delta_near;
+float shoreline_delta_far;
 }uWater;
 
 layout (location = 0) in vec2 v_uv;
@@ -114,10 +114,12 @@ float linearize_depth(float depth01, float z_near, float z_far) {
 	// Use linearized depth so shoreline/intersection behavior is stable with distance.
 	float scene_depth = texture(sceneDepthTex, refr_uv).r;
 	float surface_depth = gl_FragCoord.z;
+ 
+ 
 	float scene_depth_lin = linearize_depth(scene_depth, uWater.clip_near, uWater.clip_far);
 	float surface_depth_lin = linearize_depth(surface_depth, uWater.clip_near, uWater.clip_far);
 	float depth_delta = max(scene_depth_lin - surface_depth_lin, 0.0);
-	float thickness_t = smoothstep(0.02, 0.75, depth_delta);
+	float thickness_t = smoothstep(uWater.shoreline_delta_near, uWater.shoreline_delta_far, depth_delta);
 
 	// Blend a bit of env-based transmission for stability near screen edges / missing detail.
 	vec3 refraction_env = texture(envTex, T).rgb;

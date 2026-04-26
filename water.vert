@@ -23,10 +23,9 @@ float depth_near;
 float depth_far;
 float clip_near;
 float clip_far;
-// keep 16-byte layout (matches C++ push struct)
- 
-float _pad2;
-float _pad3;
+// shoreline/intersection depth-delta shaping controls (used in fragment stage)
+float shoreline_delta_near;
+float shoreline_delta_far;
 }uWater;
 
 layout(location = 0) in vec3 Position;

@@ -224,8 +224,11 @@ struct Tutorial : RTG::Application {
 			//  these convert "compressed depth buffer numbers" back to real distance.
 			float clip_near;
 			float clip_far; //keep size 16-byte aligned
-			float _pad2;
-			float _pad3; //keep size 16-byte aligned
+
+			// Depth-delta band used for shoreline/intersection foam shaping.
+			float shoreline_delta_near;
+			float shoreline_delta_far;
+			 
 
 		};
 		static_assert(sizeof(Push) == 48, "Water push constants must stay 48 bytes.");
