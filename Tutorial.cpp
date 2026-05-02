@@ -3666,10 +3666,29 @@ void Tutorial::on_swapchain(RTG &rtg_, RTG::SwapchainEvent const &swapchain) {
 		swapchain.extent,
 		depth_format,
 		VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		//VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		Helpers::Unmapped
 	);
+
+	water_scene_color_copy_image = rtg.helpers.create_image(
+		swapchain.extent,
+		rtg.surface_format.format,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		Helpers::Unmapped
+	);
+	water_scene_depth_copy_image = rtg.helpers.create_image(
+		swapchain.extent,
+		depth_format,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		Helpers::Unmapped
+	);
+	water_scene_copy_initialized = false;
 
 	{//create an image view of the depth image:
 		VkImageViewCreateInfo create_info{
@@ -3687,6 +3706,39 @@ void Tutorial::on_swapchain(RTG &rtg_, RTG::SwapchainEvent const &swapchain) {
 		};
 
 		VK(vkCreateImageView(rtg.device, &create_info, nullptr, &swapchain_depth_image_view));
+	}
+
+	{// sampled color copy view:
+		VkImageViewCreateInfo create_info{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = water_scene_color_copy_image.handle,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = rtg.surface_format.format,
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+		};
+		VK(vkCreateImageView(rtg.device, &create_info, nullptr, &water_scene_color_copy_view));
+	}
+	{// sampled depth copy view:
+		VkImageViewCreateInfo create_info{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = water_scene_depth_copy_image.handle,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = depth_format,
+			.subresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+		};
+		VK(vkCreateImageView(rtg.device, &create_info, nullptr, &water_scene_depth_copy_view));
 	}
 
 	//create framebuffers pointing to each swapchain image view and the shared depth image view
@@ -4491,20 +4543,42 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 					.imageView = env_cubemap_view,
 					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				};
-				VkDescriptorImageInfo water_scene_color_info{
-					.sampler = texture_sampler,
-					.imageView = rtg.swapchain_image_views[render_params.image_index],
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				};
-				VkDescriptorImageInfo water_scene_depth_info{
-					.sampler = texture_sampler,
-					.imageView = swapchain_depth_image_view,
-					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-				};
 				VkImageView water_normal_view =
 					(normal_map_views.empty())
 					? VK_NULL_HANDLE
 					: normal_map_views[std::min<size_t>(water_detail_normal_idx, normal_map_views.size() - 1)];
+				if (water_normal_view == VK_NULL_HANDLE && !texture_views.empty()) {
+					water_normal_view = texture_views[0];
+				}
+				VkImageView scene_color_view_for_water = water_scene_color_copy_view;
+				VkImageView scene_depth_view_for_water = water_scene_depth_copy_view;
+				// First frame after (re)create: copy images haven't been populated yet.
+				// Use sampled fallbacks to avoid sampling UNDEFINED-layout copy images.
+				if (!water_scene_copy_initialized) {
+					if (!texture_views.empty()) {
+						scene_color_view_for_water = texture_views[0];
+						scene_depth_view_for_water = texture_views[0];
+					}
+					else if (!normal_map_views.empty()) {
+						scene_color_view_for_water = normal_map_views[0];
+						scene_depth_view_for_water = normal_map_views[0];
+					}
+					else {
+						scene_color_view_for_water = water_normal_view;
+						scene_depth_view_for_water = water_normal_view;
+					}
+				}
+				VkDescriptorImageInfo water_scene_color_info{
+					.sampler = texture_sampler,
+					.imageView = scene_color_view_for_water,
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				};
+				VkDescriptorImageInfo water_scene_depth_info{
+					.sampler = texture_sampler,
+					.imageView = scene_depth_view_for_water,
+					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				};
+				 
 				VkDescriptorImageInfo water_normal_info{
 					.sampler = texture_sampler,
 					.imageView = water_normal_view,
@@ -4565,20 +4639,35 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 				//push constants
 				WaterPipeline::Push water_push{};
 				mat4 view_to_world_water = mat4_inverse_rigid(this->VIEW_FROM_WORLD);
-				water_push.camera_ws = {
-					view_to_world_water[12],
-					view_to_world_water[13],
-					view_to_world_water[14]
-				};
+				water_push.camera_ws_x = view_to_world_water[12];
+				water_push.camera_ws_y = view_to_world_water[13];
+				water_push.camera_ws_z = view_to_world_water[14];
 				water_push.time = time;
 				water_push.wave_strength = 1.0f;
 				water_push.foam_strength = 0.55f;
-				water_push.depth_near = 2.0f;
-				water_push.depth_far = 25.0f;
+				water_push.depth_near = 1.0f;
+				water_push.depth_far = 14.0f;
+				water_push.fresnel_f0 = 0.012f;
+				water_push.refraction_distort = 0.024f;
+				water_push.shallow_r = 0.09f;
+				water_push.shallow_g = 0.46f;
+				water_push.shallow_b = 0.52f;
+				water_push.absorption_r = 0.22f;
+				water_push.deep_r = 0.03f;
+				water_push.deep_g = 0.19f;
+				water_push.deep_b = 0.30f;
+				water_push.absorption_g = 0.12f;
+				water_push.absorption_b = 0.03f;
+				water_push.reflection_boost = 0.65f;
+				water_push.refraction_boost = 1.20f;
+				water_push.foam_cutoff = 0.60f;
+				water_push.camera_near = current_camera_near;
+				water_push.camera_far = current_camera_far;
+				water_push.thickness_min = 0.03f;
+				water_push.thickness_max = 1.25f;
+				water_push.debug_view = 0;
 				water_push._pad0 = 0.0f;
-				water_push._pad1 = 0.0f;
-				water_push._pad2 = 0.0f;
-				water_push._pad3 = 0.0f;
+				 
 
 				vkCmdPushConstants(
 					workspace.command_buffer,
@@ -4597,6 +4686,160 @@ void Tutorial::render(RTG& rtg_, RTG::RenderParams const& render_params) {
 			}
 		}
 		vkCmdEndRenderPass(workspace.command_buffer);
+
+		{// Capture current scene color/depth into sampled images for next-frame water sampling.
+			VkImageMemoryBarrier color_src_to_copy{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = 0,
+				.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+				.oldLayout = rtg.present_layout,
+				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = rtg.swapchain_images[render_params.image_index],
+				.subresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0, .levelCount = 1,
+					.baseArrayLayer = 0, .layerCount = 1
+				},
+			};
+			VkImageMemoryBarrier depth_src_to_copy{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+				.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = swapchain_depth_image.handle,
+				.subresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.baseMipLevel = 0, .levelCount = 1,
+					.baseArrayLayer = 0, .layerCount = 1
+				},
+			};
+			VkImageMemoryBarrier color_dst_to_copy{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = water_scene_copy_initialized ? VK_ACCESS_SHADER_READ_BIT : VkAccessFlags(0),
+				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+				.oldLayout = water_scene_copy_initialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = water_scene_color_copy_image.handle,
+				.subresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0, .levelCount = 1,
+					.baseArrayLayer = 0, .layerCount = 1
+				},
+			};
+			VkImageMemoryBarrier depth_dst_to_copy{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = water_scene_copy_initialized ? VK_ACCESS_SHADER_READ_BIT : VkAccessFlags(0),
+				.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+				.oldLayout = water_scene_copy_initialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+				.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = water_scene_depth_copy_image.handle,
+				.subresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.baseMipLevel = 0, .levelCount = 1,
+					.baseArrayLayer = 0, .layerCount = 1
+				},
+			};
+			std::array<VkImageMemoryBarrier, 4> to_copy{ color_src_to_copy, depth_src_to_copy, color_dst_to_copy, depth_dst_to_copy };
+			vkCmdPipelineBarrier(
+				workspace.command_buffer,
+				VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				uint32_t(to_copy.size()), to_copy.data()
+			);
+
+			VkImageCopy color_copy{
+				.srcSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+				.srcOffset{0,0,0},
+				.dstSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+				.dstOffset{0,0,0},
+				.extent{ rtg.swapchain_extent.width, rtg.swapchain_extent.height, 1 },
+			};
+			vkCmdCopyImage(
+				workspace.command_buffer,
+				rtg.swapchain_images[render_params.image_index], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				water_scene_color_copy_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &color_copy
+			);
+			VkImageCopy depth_copy{
+				.srcSubresource{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+				.srcOffset{0,0,0},
+				.dstSubresource{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+				.dstOffset{0,0,0},
+				.extent{ rtg.swapchain_extent.width, rtg.swapchain_extent.height, 1 },
+			};
+			vkCmdCopyImage(
+				workspace.command_buffer,
+				swapchain_depth_image.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				water_scene_depth_copy_image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1, &depth_copy
+			);
+
+			VkImageMemoryBarrier color_src_back{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+				.dstAccessMask = 0,
+				.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				.newLayout = rtg.present_layout,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = rtg.swapchain_images[render_params.image_index],
+				.subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 },
+			};
+			VkImageMemoryBarrier depth_src_back{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+				.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = swapchain_depth_image.handle,
+				.subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 },
+			};
+			VkImageMemoryBarrier color_dst_to_read{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+				.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = water_scene_color_copy_image.handle,
+				.subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 },
+			};
+			VkImageMemoryBarrier depth_dst_to_read{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+				.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.image = water_scene_depth_copy_image.handle,
+				.subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 },
+			};
+			std::array<VkImageMemoryBarrier, 4> to_read{ color_src_back, depth_src_back, color_dst_to_read, depth_dst_to_read };
+			vkCmdPipelineBarrier(
+				workspace.command_buffer,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				0, 0, nullptr, 0, nullptr,
+				uint32_t(to_read.size()), to_read.data()
+			);
+			water_scene_copy_initialized = true;
+		}
 	}
 
 	//end recording:
@@ -5194,6 +5437,8 @@ void Tutorial::update(float dt) {
 		);
 
 		CLIP_FROM_WORLD = CLIP_FROM_VIEW * VIEW_FROM_WORLD;
+		current_camera_near = cam.near;
+		current_camera_far = cam.far;
 		
 		};
 
@@ -5231,6 +5476,8 @@ void Tutorial::update(float dt) {
 
 			VIEW_FROM_WORLD = CAMERA_FROM_WORLD;
 			CLIP_FROM_VIEW = perspective(vfov, scene_cam_aspect, near_, far_);
+			current_camera_near = near_;
+			current_camera_far = far_;
 
 			CLIP_FROM_WORLD = CLIP_FROM_VIEW * VIEW_FROM_WORLD;
 			CLIP_FROM_CULL = CLIP_FROM_WORLD;

@@ -1,18 +1,17 @@
 ["s72-v2",
 {
 	"type":"ENVIRONMENT",
-	"name":"SanFrancisco-cubemap-strip.png",
-	"radiance":{"src":"SanFrancisco-cubemap-strip.png", "type":"cube", "format":"rgbe"}
+	"name":"ox_bridge_morning.png",
+	"radiance":{"src":"ox_bridge_morning.png", "type":"cube", "format":"rgbe"}
 },
 {
 	"type":"NODE",
-	"name":"!SanFrancisco-cubemap-strip.png",
+	"name":"!environment:ox_bridge_morning.png",
 	"translation":[0,0,4.48802],
 	"rotation":[0,0,0,1],
 	"scale":[1,1,1],
-	"environment":"SanFrancisco-cubemap-strip.png"
+	"environment":"ox_bridge_morning.png"
 },
-
 {
 
 	"type":"LIGHT",
@@ -26,9 +25,9 @@
 {
 	"type":"NODE",
 	"name":"Light",
-	"translation":[4.07625,1.00545,20.0514],
-	"rotation":[0.169076,0.272171,0.75588,0.570948],
-	"scale":[1,1,1],
+	"translation":[-5.54282,47.9194,-31.3253],
+	"rotation":[-0.282699,0.725981,0.34407,0.52407],
+	"scale":[0.66644,0.66644,0.66644],
 	"light":"Light"
 },
 {
@@ -45,16 +44,16 @@
 {
 	"type":"NODE",
 	"name":"Camera",
-	"translation":[7.35889,-6.92579,4.95831],
-	"rotation":[0.483536,0.208704,0.336872,0.780483],
-	"scale":[1,1,1],
+	"translation":[-3.35513,37.8313,-26.0961],
+	"rotation":[-0.207467,0.385524,0.0917093,0.894381],
+	"scale":[0.66644,0.66644,0.66644],
 	"camera":"Camera"
 },
 {
 	"type":"MESH",
 	"name":"Plane",
 	"topology":"TRIANGLE_LIST",
-	"count":2904,
+	"count":351384,
 	"attributes":{
 		"POSITION":{ "src":"WaterTest.Plane.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
 		"NORMAL":{ "src":"WaterTest.Plane.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
@@ -65,9 +64,9 @@
 {
 	"type":"NODE",
 	"name":"WaterPlane",
-	"translation":[0,0,0],
-	"rotation":[-0,-1,-0,4.37114e-08],
-	"scale":[244.346,244.346,244.346],
+	"translation":[-8.25939,34.5528,-30.7301],
+	"rotation":[-1.72759e-10,-0.709086,0.705122,6.18165e-08],
+	"scale":[162.842,162.842,162.842],
 	"mesh":"Plane"
 },
 {
@@ -85,9 +84,9 @@
 {
 	"type":"NODE",
 	"name":"Rock1",
-	"translation":[-141.313,-75.5801,4.20977],
-	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
-	"scale":[21.9385,21.9385,21.9385],
+	"translation":[-102.436,37.076,19.6544],
+	"rotation":[-0.232763,-0.207486,-0.341115,0.886798],
+	"scale":[14.6207,14.6207,14.6207],
 	"mesh":"Cube.002"
 },
 {
@@ -105,9 +104,9 @@
 {
 	"type":"NODE",
 	"name":"Rock2",
-	"translation":[155.764,81.2329,-6.08945],
-	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
-	"scale":[21.9385,21.9385,21.9385],
+	"translation":[95.5481,30.798,-84.8889],
+	"rotation":[-0.232763,-0.207486,-0.341115,0.886798],
+	"scale":[14.6207,14.6207,14.6207],
 	"mesh":"Cube.003"
 },
 {
@@ -125,9 +124,9 @@
 {
 	"type":"NODE",
 	"name":"Rock3",
-	"translation":[-103.355,107.991,-2.25723],
-	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
-	"scale":[21.9385,21.9385,21.9385],
+	"translation":[-77.1395,33.4519,-102.707],
+	"rotation":[-0.232763,-0.207486,-0.341115,0.886798],
+	"scale":[14.6207,14.6207,14.6207],
 	"mesh":"Cube.004"
 },
 {
@@ -145,9 +144,9 @@
 {
 	"type":"NODE",
 	"name":"Rock1.001",
-	"translation":[-16.8611,142.841,-43.2399],
-	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
-	"scale":[21.9385,21.9385,21.9385],
+	"translation":[19.9521,6.26996,-126.085],
+	"rotation":[-0.232763,-0.207486,-0.341115,0.886798],
+	"scale":[14.6207,14.6207,14.6207],
 	"mesh":"Cube.001"
 },
 {
@@ -165,16 +164,16 @@
 {
 	"type":"NODE",
 	"name":"Rock1.002",
-	"translation":[-128.523,97.0874,-89.3348],
-	"rotation":[0.460252,0.0934028,-0.388182,0.792943],
-	"scale":[21.9385,21.9385,21.9385],
+	"translation":[-58.9468,-40.9334,-76.6906],
+	"rotation":[-0.232763,-0.207486,-0.341115,0.886798],
+	"scale":[14.6207,14.6207,14.6207],
 	"mesh":"Cube.005"
 },
 {
 	"type":"MESH",
 	"name":"Plane.001",
 	"topology":"TRIANGLE_LIST",
-	"count":6,
+	"count":600,
 	"attributes":{
 		"POSITION":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
 		"NORMAL":{ "src":"WaterTest.Plane.001.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
@@ -184,16 +183,124 @@
 },
 {
 	"type":"NODE",
-	"name":"Plane",
-	"translation":[0,-269.768,9.24128],
-	"rotation":[-0.128397,0,0,0.991723],
-	"scale":[259.617,169.051,169.051],
+	"name":"Sand",
+	"translation":[-8.25939,39.7037,149.086],
+	"rotation":[-0.79033,-0,-0,0.612681],
+	"scale":[173.019,112.663,112.663],
 	"mesh":"Plane.001"
 },
-
+{
+	"type":"MESH",
+	"name":"Plane.003",
+	"topology":"TRIANGLE_LIST",
+	"count":351384,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.003.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.003.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.003.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.003.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Floor.001",
+	"translation":[-8.25939,-72.9931,-31.333],
+	"rotation":[6.18165e-08,0.705122,0.709086,1.72769e-10],
+	"scale":[162.842,162.842,162.842],
+	"mesh":"Plane.003"
+},
+{
+	"type":"MESH",
+	"name":"Plane.004",
+	"topology":"TRIANGLE_LIST",
+	"count":351384,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.004.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.004.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.004.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.004.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Floor.002",
+	"translation":[-8.25939,-21.6845,132.728],
+	"rotation":[-1,-3.13916e-07,-4.37114e-08,1.37217e-14],
+	"scale":[164.101,52.6374,162.842],
+	"mesh":"Plane.004"
+},
+{
+	"type":"MESH",
+	"name":"Plane.005",
+	"topology":"TRIANGLE_LIST",
+	"count":351384,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.005.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.005.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.005.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.005.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Floor.003",
+	"translation":[-8.25939,-19.2274,-193.845],
+	"rotation":[0.00280261,0,0,0.999996],
+	"scale":[163.706,55.0294,162.842],
+	"mesh":"Plane.005"
+},
+{
+	"type":"MESH",
+	"name":"Plane.006",
+	"topology":"TRIANGLE_LIST",
+	"count":351384,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.006.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.006.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.006.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.006.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Floor.004",
+	"translation":[-171.963,-20.1336,-32.1752],
+	"rotation":[0.00198173,0.707104,0.00198173,0.707104],
+	"scale":[163.961,55.0294,162.842],
+	"mesh":"Plane.006"
+},
+{
+	"type":"MESH",
+	"name":"Plane.007",
+	"topology":"TRIANGLE_LIST",
+	"count":351384,
+	"attributes":{
+		"POSITION":{ "src":"WaterTest.Plane.007.pnTt.b72", "offset":0, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"NORMAL":{ "src":"WaterTest.Plane.007.pnTt.b72", "offset":12, "stride":48, "format":"R32G32B32_SFLOAT" },
+		"TANGENT":{ "src":"WaterTest.Plane.007.pnTt.b72", "offset":24, "stride":48, "format":"R32G32B32A32_SFLOAT" },
+		"TEXCOORD":{ "src":"WaterTest.Plane.007.pnTt.b72", "offset":40, "stride":48, "format":"R32G32_SFLOAT" }
+	}
+},
+{
+	"type":"NODE",
+	"name":"Floor.005",
+	"translation":[155.677,-20.1447,-30.1946],
+	"rotation":[-0.707104,-0.00198181,0.707104,0.00198187],
+	"scale":[163.961,55.0294,162.842],
+	"mesh":"Plane.007"
+},
+{
+	"type":"DRIVER",
+	"name":"!environment:ox_bridge_morning.png-rotation",
+	"node":"!environment:ox_bridge_morning.png",
+	"channel":"rotation",
+	"times":[0.000,0.033,0.067,0.100,0.133,0.167,0.200,0.233,0.267,0.300,0.333,0.367,0.400,0.433,0.467,0.500,0.533,0.567,0.600,0.633,0.667,0.700,0.733,0.767,0.800,0.833,0.867,0.900,0.933,0.967,1.000,1.033,1.067,1.100,1.133,1.167,1.200,1.233,1.267,1.300,1.333,1.367,1.400,1.433,1.467,1.500,1.533,1.567,1.600,1.633,1.667,1.700,1.733,1.767,1.800,1.833,1.867,1.900,1.933,1.967,2.000],
+	"values":[0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0,1, 0,0,0.0102391,0.999948, 0,0,0.0400155,0.999199, 0,0,0.0878512,0.996134, 0,0,0.152066,0.98837, 0,0,0.230616,0.973045, 0,0,0.320944,0.947098, 0,0,0.419874,0.907582, 0,0,0.52359,0.851971, 0,0,0.627691,0.778462, 0,0,0.727374,0.686242, 0,0,0.817681,0.575671, 0,0,0.893841,0.448383, 0,0,0.95163,0.307246, 0,0,0.987725,0.156205, -0,-0,-1,4.37114e-08, -0,-0,-0.987725,0.156205, -0,-0,-0.95163,0.307246, -0,-0,-0.893841,0.448383, -0,-0,-0.817681,0.575672, -0,-0,-0.727374,0.686242, 0,0,-0.627691,0.778462, 0,0,-0.523589,0.851971, 0,0,-0.419875,0.907582, 0,0,-0.320943,0.947098, 0,0,-0.230616,0.973045, 0,0,-0.152065,0.98837, 0,0,-0.0878513,0.996134, 0,0,-0.0400156,0.999199, 0,0,-0.0102391,0.999948, 0,0,8.74228e-08,1],
+	"interpolation":"SLERP"
+},
 {
 	"type":"SCENE",
 	"name":"WaterTest.blend",
-	"roots":["!SanFrancisco-cubemap-strip.png","Light", "Camera", "WaterPlane", "Rock1", "Rock2", "Rock3", "Rock1.001", "Rock1.002", "Plane"]
+	"roots":["!environment:ox_bridge_morning.png","Light", "Camera", "WaterPlane", "Rock1", "Rock2", "Rock3", "Rock1.001", "Rock1.002", "Sand", "Floor.001", "Floor.002", "Floor.003", "Floor.004", "Floor.005"]
 }
 ]

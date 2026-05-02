@@ -205,8 +205,9 @@ struct Tutorial : RTG::Application {
 		 //push constants
 
 		struct Push {
-			S72::vec3 camera_ws; // 12 bytes WORLD SPACE CAMERA POSITION
-
+			float camera_ws_x;
+			float camera_ws_y;
+			float camera_ws_z;
 			float time; //seconds, loops in update
 			float wave_strength; //vertocal shape amount
 
@@ -216,13 +217,32 @@ struct Tutorial : RTG::Application {
 
 			float depth_far; //proxy end distance for shallow->deep transition
 
+			float fresnel_f0;  // dielectric water ~0.02
+			float refraction_distort;
+
+			float shallow_r;
+			float shallow_g;
+			float shallow_b;
+			float absorption_r;
+			float deep_r;
+			float deep_g;
+			float deep_b;
+			float absorption_g;
+			float absorption_b;
+			float reflection_boost;
+			float refraction_boost;
+			float foam_cutoff;
+			float camera_near;
+			float camera_far;
+			float thickness_min;
+			float thickness_max;
+			int32_t debug_view; // 0 normal, 1 thickness, 2 foam, 3 fresnel
 			float _pad0;
-			float _pad1; //keep size 16-byte aligned
-			float _pad2;
-			float _pad3; //keep size 16-byte aligned
+
+			 
 
 		};
-		static_assert(sizeof(Push) == 48, "Water push constants must stay 48 bytes.");
+		static_assert(sizeof(Push) == 112, "Water push constants must stay 112 bytes.");
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
 		using Vertex = PosNorTexVertex;
@@ -404,6 +424,11 @@ struct Tutorial : RTG::Application {
 
 	Helpers::AllocatedImage swapchain_depth_image;
 	VkImageView swapchain_depth_image_view = VK_NULL_HANDLE;
+	Helpers::AllocatedImage water_scene_color_copy_image;
+	VkImageView water_scene_color_copy_view = VK_NULL_HANDLE;
+	Helpers::AllocatedImage water_scene_depth_copy_image;
+	VkImageView water_scene_depth_copy_view = VK_NULL_HANDLE;
+	bool water_scene_copy_initialized = false;
 	std::vector< VkFramebuffer > swapchain_framebuffers;
 
 	//used from on_swapchain and the destructor: (framebuffers are created in on_swapchain)
@@ -503,6 +528,8 @@ struct Tutorial : RTG::Application {
 	mat4 CLIP_FROM_WORLD; //matrix through which to view grid line
 	mat4 VIEW_FROM_WORLD;
 	mat4 CLIP_FROM_VIEW;
+	float current_camera_near = 0.1f;
+	float current_camera_far = 1000.0f;
 	std::vector< LinesPipeline::Vertex > lines_vertices;
 
 	ObjectsPipeline::World world;

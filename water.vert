@@ -11,7 +11,9 @@ Transform TRANSFORMS[];
 };
 
 layout(push_constant) uniform WaterPush {
-vec3 camera_ws;
+float camera_ws_x;
+float camera_ws_y;
+float camera_ws_z;
 //seconds since app start (loops in c++)
 float time;
 //global multiplier for wave look
@@ -19,13 +21,27 @@ float wave_strength;
  //shoreline-style edge boost (used in fragment stage)
 float foam_strength;
 // proxy depth coloring controls (used in fragment stage)
-float depth_near;
-float depth_far;
-// keep 16-byte layout (matches C++ push struct)
+float fresnel_f0;
+float refraction_distort;
+float shallow_r;
+float shallow_g;
+float shallow_b;
+float absorption_r;
+float deep_r;
+float deep_g;
+float deep_b;
+float absorption_g;
+float absorption_b;
+float reflection_boost;
+float refraction_boost;
+float foam_cutoff;
+float camera_near;
+float camera_far;
+float thickness_min;
+float thickness_max;
+int debug_view;
 float _pad0;
-float _pad1;
-float _pad2;
-float _pad3;
+ 
 }uWater;
 
 layout(location = 0) in vec3 Position;
